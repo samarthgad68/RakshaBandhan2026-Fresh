@@ -61,6 +61,42 @@ const VERIFIED_PAYMENT_TOKENS = new Set<string>([
   'pay_token_local',
 ]);
 
+// Directory for temporarily storing generated MP4 video files
+const GENERATED_VIDEOS_DIR = path.join('/tmp', 'generated_videos');
+try {
+  if (!fs.existsSync(GENERATED_VIDEOS_DIR)) {
+    fs.mkdirSync(GENERATED_VIDEOS_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Could not initialize GENERATED_VIDEOS_DIR:', e);
+}
+
+// In-memory registry for generated video files
+interface VideoRecord {
+  filePath: string;
+  filename: string;
+  name: string;
+  templateId: string;
+  createdAt: number;
+  size: number;
+}
+const GENERATED_VIDEOS = new Map<string, VideoRecord>();
+
+// Clean up video files older than 60 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, record] of GENERATED_VIDEOS.entries()) {
+    if (now - record.createdAt > 60 * 60 * 1000) {
+      try {
+        if (fs.existsSync(record.filePath)) {
+          fs.unlinkSync(record.filePath);
+        }
+      } catch {}
+      GENERATED_VIDEOS.delete(id);
+    }
+  }
+}, 5 * 60 * 1000);
+
 // Endpoint 1: Verify Payment
 app.post('/api/verify-payment', (req, res) => {
   const {
@@ -688,6 +724,15 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${sanitized
         }
       );
 
+      if (!fs.existsSync(outputMp4Path) || fs.statSync(outputMp4Path).size < 1000) {
+        throw new Error('Generated MP4 file is empty or corrupted.');
+      }
+
+      const videoId = `video_${crypto.randomBytes(10).toString('hex')}`;
+      const persistentMp4Path = path.join(GENERATED_VIDEOS_DIR, `${videoId}.mp4`);
+      fs.copyFileSync(outputMp4Path, persistentMp4Path);
+
+      const videoStat = fs.statSync(persistentMp4Path);
       const safeAsciiFilename =
         sanitizedName.replace(
           /[^a-zA-Z0-9_-]/g,
@@ -699,31 +744,46 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${sanitized
           sanitizedName
         );
 
-      res.setHeader(
-        'Content-Type',
-        'video/mp4'
-      );
+      const finalFilename = `RakshaBandhan_${safeAsciiFilename}.mp4`;
 
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="RakshaBandhan_${safeAsciiFilename}.mp4"; filename*=UTF-8''RakshaBandhan_${encodedFilename}.mp4`
-      );
+      GENERATED_VIDEOS.set(videoId, {
+        filePath: persistentMp4Path,
+        filename: finalFilename,
+        name: sanitizedName,
+        templateId,
+        createdAt: Date.now(),
+        size: videoStat.size
+      });
 
-      const fileStream =
-        fs.createReadStream(
-          outputMp4Path
+      // Immediate cleanup of temporary input directory for user privacy
+      cleanupDirectory(tempDir);
+
+      // If client requests raw stream directly via query
+      if (req.query.format === 'stream') {
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Length', videoStat.size);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${finalFilename}"; filename*=UTF-8''RakshaBandhan_${encodedFilename}.mp4`
         );
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
+        return res.sendFile(persistentMp4Path);
+      }
 
-      fileStream.pipe(res);
+      // Default: Return JSON with permanent download & streaming URLs
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
+      return res.json({
+        success: true,
+        videoId,
+        filename: finalFilename,
+        downloadUrl: `/api/download-video/${videoId}`,
+        videoUrl: `/api/video/${videoId}.mp4`,
+        size: videoStat.size,
+        createdAt: new Date().toISOString()
+      });
 
-      fileStream.on(
-        'end',
-        () => {
-          cleanupDirectory(
-            tempDir
-          );
-        }
-      );
     } catch (error: any) {
       console.error(
         'Video Generation Server Error:',
@@ -745,6 +805,73 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${sanitized
     }
   }
 );
+
+// Endpoint 3: Direct Download Video with RFC 5987 Content-Disposition
+app.get('/api/download-video/:videoId', (req, res) => {
+  const { videoId } = req.params;
+  const cleanId = videoId.replace(/\.mp4$/i, '');
+  const record = GENERATED_VIDEOS.get(cleanId);
+  const targetPath = record?.filePath || path.join(GENERATED_VIDEOS_DIR, `${cleanId}.mp4`);
+
+  if (!fs.existsSync(targetPath)) {
+    return res.status(404).send('Video file not found or has expired. Please generate a new video.');
+  }
+
+  const stat = fs.statSync(targetPath);
+  const rawName = record?.name || 'Greeting';
+  const safeAsciiFilename = rawName.replace(/[^a-zA-Z0-9_-]/g, '_') || 'Greeting';
+  const encodedFilename = encodeURIComponent(rawName);
+  const finalFilename = record?.filename || `RakshaBandhan_${safeAsciiFilename}.mp4`;
+
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Length', stat.size);
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${finalFilename}"; filename*=UTF-8''RakshaBandhan_${encodedFilename}.mp4`
+  );
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+
+  res.sendFile(targetPath);
+});
+
+// Endpoint 4: Video Inline Stream (for <video> player preview and range streaming)
+app.get('/api/video/:videoId', (req, res) => {
+  const { videoId } = req.params;
+  const cleanId = videoId.replace(/\.mp4$/i, '');
+  const record = GENERATED_VIDEOS.get(cleanId);
+  const targetPath = record?.filePath || path.join(GENERATED_VIDEOS_DIR, `${cleanId}.mp4`);
+
+  if (!fs.existsSync(targetPath)) {
+    return res.status(404).send('Video not found or expired.');
+  }
+
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+
+  res.sendFile(targetPath);
+});
+
+// Alias for stream compatibility
+app.get('/api/video-stream/:videoId', (req, res) => {
+  const { videoId } = req.params;
+  const cleanId = videoId.replace(/\.mp4$/i, '');
+  const record = GENERATED_VIDEOS.get(cleanId);
+  const targetPath = record?.filePath || path.join(GENERATED_VIDEOS_DIR, `${cleanId}.mp4`);
+
+  if (!fs.existsSync(targetPath)) {
+    return res.status(404).send('Video not found or expired.');
+  }
+
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.sendFile(targetPath);
+});
 
 // Utility: Cleanup temporary user upload files & directories immediately
 function cleanupDirectory(

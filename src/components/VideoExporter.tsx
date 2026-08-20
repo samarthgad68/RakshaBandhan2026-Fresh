@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GreetingFormData, VideoTemplate, PaymentInfo } from '../types';
-import { Download, CheckCircle2, ShieldCheck, X, FileVideo, AlertCircle } from 'lucide-react';
+import { Download, CheckCircle2, ShieldCheck, X, FileVideo, AlertCircle, ExternalLink } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface VideoExporterProps {
@@ -21,7 +21,9 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
   const [progress, setProgress] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isDone, setIsDone] = useState<boolean>(false);
-  const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
+  const [videoPlayUrl, setVideoPlayUrl] = useState<string | null>(null);
+  const [serverDownloadUrl, setServerDownloadUrl] = useState<string | null>(null);
+  const [downloadFilename, setDownloadFilename] = useState<string>('RakshaBandhan_Video.mp4');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,7 +31,8 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
       setProgress(0);
       setIsGenerating(false);
       setIsDone(false);
-      setVideoBlobUrl(null);
+      setVideoPlayUrl(null);
+      setServerDownloadUrl(null);
       setErrorMsg(null);
       return;
     }
@@ -38,6 +41,25 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
     generateVideoOnServer();
   }, [isOpen]);
 
+  const triggerDirectDownload = (url: string, filename: string) => {
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+        } catch {}
+      }, 200);
+    } catch (e) {
+      console.warn('Programmatic download trigger notification:', e);
+    }
+  };
+
   const generateVideoOnServer = async () => {
     setIsGenerating(true);
     setProgress(15);
@@ -45,8 +67,8 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
 
     // Simulated progress timer while server processes FFmpeg MP4
     const progressInterval = setInterval(() => {
-      setProgress(prev => (prev < 88 ? prev + 8 : prev));
-    }, 400);
+      setProgress(prev => (prev < 90 ? prev + 6 : prev));
+    }, 350);
 
     try {
       const res = await fetch('/api/generate-video', {
@@ -67,22 +89,37 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
         throw new Error(errorData.error || 'Server error generating video');
       }
 
-      // Convert response stream to video blob
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const contentType = res.headers.get('content-type') || '';
+      let playUrl = '';
+      let downloadUrl = '';
+      let finalName = `RakshaBandhan_${formData.name ? formData.name.replace(/[^a-zA-Z0-9_-]/g, '_') : 'Video'}.mp4`;
 
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Video generation was not successful');
+        }
+        playUrl = data.videoUrl || data.downloadUrl;
+        downloadUrl = data.downloadUrl;
+        if (data.filename) {
+          finalName = data.filename;
+        }
+      } else {
+        // Raw stream fallback
+        const blob = await res.blob();
+        playUrl = URL.createObjectURL(blob);
+        downloadUrl = playUrl;
+      }
+
+      setVideoPlayUrl(playUrl);
+      setServerDownloadUrl(downloadUrl);
+      setDownloadFilename(finalName);
       setProgress(100);
       setIsGenerating(false);
       setIsDone(true);
-      setVideoBlobUrl(url);
 
-      // Automatically trigger file download for user convenience (especially on mobile)
-      const downloadLink = document.createElement('a');
-      downloadLink.href = url;
-      downloadLink.download = `RakshaBandhan_${formData.name ? formData.name.replace(/[^a-zA-Z0-9_-]/g, '_') : 'Video'}.mp4`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
+      // Trigger auto download safely
+      triggerDirectDownload(downloadUrl, finalName);
 
       confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
 
@@ -97,13 +134,9 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
   if (!isOpen) return null;
 
   const handleDownloadFile = () => {
-    if (!videoBlobUrl) return;
-    const a = document.createElement('a');
-    a.href = videoBlobUrl;
-    a.download = `RakshaBandhan_${formData.name || 'Video'}.mp4`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const targetUrl = serverDownloadUrl || videoPlayUrl;
+    if (!targetUrl) return;
+    triggerDirectDownload(targetUrl, downloadFilename);
   };
 
   return (
@@ -170,15 +203,15 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
               </h3>
 
               {/* Generated Video Preview Player */}
-              {videoBlobUrl && (
+              {videoPlayUrl && (
                 <div className="my-3 space-y-2">
                   <video
-                    src={videoBlobUrl}
+                    src={videoPlayUrl}
                     controls
                     autoPlay
                     loop
                     playsInline
-                    className="w-full max-h-[380px] rounded-2xl border-2 border-[#C5A059] bg-black object-contain shadow-lg mx-auto"
+                    className="w-full max-h-[360px] rounded-2xl border-2 border-[#C5A059] bg-black object-contain shadow-lg mx-auto"
                   />
                   <p className="text-xs text-[#57534E]">
                     Preview your personalized video above.
@@ -195,14 +228,30 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
                 <span>Download HD MP4 Video</span>
               </button>
 
+              {/* Direct Link Fallback */}
+              {serverDownloadUrl && (
+                <div className="pt-1">
+                  <a
+                    href={serverDownloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={downloadFilename}
+                    className="inline-flex items-center gap-1.5 text-xs text-[#8A1538] hover:underline font-bold"
+                  >
+                    <span>Direct Download Link</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+
               {/* Data Privacy & Auto Delete Notice */}
-              <div className="bg-white p-3.5 rounded-2xl border border-emerald-600/30 text-xs text-emerald-900 text-left space-y-1 mt-4 shadow-sm">
+              <div className="bg-white p-3.5 rounded-2xl border border-emerald-600/30 text-xs text-emerald-900 text-left space-y-1 mt-3 shadow-sm">
                 <div className="flex items-center gap-1.5 font-bold text-emerald-700">
                   <ShieldCheck className="w-4 h-4 shrink-0" />
                   <span>Privacy & Security Guarantee:</span>
                 </div>
                 <p className="text-[11px] text-[#57534E] leading-normal">
-                  Your uploaded photo and temporary video files have been 100% automatically deleted from server memory. 🔒
+                  Your uploaded photo and temporary working files have been 100% automatically deleted from server memory. 🔒
                 </p>
               </div>
             </>
