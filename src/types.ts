@@ -42,6 +42,7 @@ export interface GreetingFormData {
 export interface PaymentInfo {
   isPaid: boolean;
   paymentId: string;
+  orderId?: string;
   upiRef: string;
   amount: number;
   paidAt: string | null;

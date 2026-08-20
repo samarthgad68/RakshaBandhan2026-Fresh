@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { X, ShieldCheck, CheckCircle2, Lock, ArrowRight, QrCode } from 'lucide-react';
+import { X, ShieldCheck, CheckCircle2, Lock, ArrowRight, QrCode, AlertCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PaymentInfo } from '../types';
+import { apiUrl, loadRazorpayScript } from '../utils/api';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -21,12 +22,22 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 }) => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [selectedApp, setSelectedApp] = useState<string>('gpay');
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [paymentSuccess, setPaymentSuccess] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      // Generate standard UPI QR code string
+      setErrorMessage(null);
+      setIsProcessing(false);
+      setIsVerifying(false);
+      setPaymentSuccess(false);
+
+      // Preload Razorpay Checkout SDK
+      loadRazorpayScript().catch(err => console.warn('Razorpay script preload note:', err));
+
+      // Generate standard UPI QR preview
       const upiUrl = `upi://pay?pa=rakshabandhan@upi&pn=RakshaBandhanGreetings&am=11.00&cu=INR&tn=RakshaBandhanVideo_${templateId}`;
       QRCode.toDataURL(upiUrl, { width: 250, margin: 2, color: { dark: '#8a1538', light: '#ffffff' } })
         .then(url => setQrCodeUrl(url))
@@ -36,58 +47,140 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleVerifyPayment = async () => {
-    setIsSimulating(true);
+  const handleInitiatePayment = async () => {
+    setErrorMessage(null);
+    setIsProcessing(true);
+
     try {
-      // Call backend server to verify payment and receive signed session token
-      const res = await fetch('/api/verify-payment', {
+      // 1. Ensure Razorpay Checkout SDK is ready
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded || !(window as any).Razorpay) {
+        throw new Error('Razorpay Checkout SDK could not be loaded. Please check your internet connection.');
+      }
+
+      // 2. Call backend to create real Razorpay Order
+      const createOrderRes = await fetch(apiUrl('/api/create-order'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          templateId,
-          upiRef: 'UPI' + Date.now().toString().substring(3),
-          amount: 11
+          amount: 11,
+          templateId: templateId
         })
       });
 
-      const data = await res.json();
+      const orderData = await createOrderRes.json().catch(() => ({}));
 
-      if (data.success && data.paymentToken) {
-        setIsSimulating(false);
-        setPaymentSuccess(true);
-        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-
-        const verifiedInfo: PaymentInfo = {
-          isPaid: true,
-          paymentId: 'PAY_' + Math.random().toString(36).substring(2, 9).toUpperCase(),
-          upiRef: 'UPI' + Date.now().toString().substring(3),
-          amount: 11,
-          paidAt: new Date().toLocaleTimeString(),
-          paymentToken: data.paymentToken
-        };
-
-        setTimeout(() => {
-          onPaymentSuccess(verifiedInfo);
-          onClose();
-        }, 1000);
-      } else {
-        throw new Error(data.error || 'Payment verification failed');
+      if (!createOrderRes.ok || !orderData.success || !orderData.order) {
+        const backendError = orderData.error || 'Failed to create Razorpay Order on server.';
+        throw new Error(backendError);
       }
-    } catch (err: any) {
-      console.error('Payment error:', err);
-      // Fallback client simulation token if dev server restart is pending
-      const fallbackToken = `pay_token_fallback_${Date.now()}`;
-      setIsSimulating(false);
-      setPaymentSuccess(true);
-      onPaymentSuccess({
-        isPaid: true,
-        paymentId: 'PAY_LOCAL',
-        upiRef: 'UPI_LOCAL',
-        amount: 11,
-        paidAt: new Date().toLocaleTimeString(),
-        paymentToken: fallbackToken
+
+      const { order, keyId } = orderData;
+      const effectiveKeyId = keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
+
+      if (!effectiveKeyId) {
+        throw new Error('Razorpay Key ID is not configured. Please ensure RAZORPAY_KEY_ID is set in your backend environment variables.');
+      }
+
+      // 3. Configure Razorpay Standard Checkout Options
+      const options = {
+        key: effectiveKeyId,
+        amount: order.amount,
+        currency: order.currency || 'INR',
+        name: 'Raksha Bandhan Video Greetings',
+        description: `₹11 HD Video Unlock (${templateName})`,
+        image: 'https://cdn-icons-png.flaticon.com/512/8244/8244431.png',
+        order_id: order.id,
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
+          // User completed payment in Razorpay Checkout!
+          // Now verify signature with the backend
+          setIsProcessing(false);
+          setIsVerifying(true);
+          setErrorMessage(null);
+
+          try {
+            const verifyRes = await fetch(apiUrl('/api/verify-payment'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                templateId: templateId,
+                amount: 11
+              })
+            });
+
+            const verifyData = await verifyRes.json().catch(() => ({}));
+
+            if (!verifyRes.ok || !verifyData.success || !verifyData.paymentToken) {
+              throw new Error(verifyData.error || 'Payment signature verification failed on server.');
+            }
+
+            // Real payment verified successfully!
+            setIsVerifying(false);
+            setPaymentSuccess(true);
+            confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+
+            const verifiedPayment: PaymentInfo = {
+              isPaid: true,
+              paymentId: response.razorpay_payment_id,
+              orderId: response.razorpay_order_id,
+              upiRef: response.razorpay_payment_id,
+              amount: 11,
+              paidAt: new Date().toLocaleTimeString(),
+              paymentToken: verifyData.paymentToken
+            };
+
+            setTimeout(() => {
+              onPaymentSuccess(verifiedPayment);
+              onClose();
+            }, 1200);
+
+          } catch (verifyErr: any) {
+            console.error('Signature verification error:', verifyErr);
+            setIsVerifying(false);
+            setErrorMessage(verifyErr.message || 'Payment signature verification failed. Please try again.');
+          }
+        },
+        prefill: {
+          name: '',
+          email: '',
+          contact: ''
+        },
+        notes: {
+          templateId: templateId,
+          app: 'RakshaBandhanGreetings'
+        },
+        theme: {
+          color: '#8A1538'
+        },
+        modal: {
+          ondismiss: () => {
+            setIsProcessing(false);
+          }
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+
+      rzp.on('payment.failed', (response: any) => {
+        setIsProcessing(false);
+        const reason = response.error?.description || response.error?.reason || 'Payment was unsuccessful.';
+        setErrorMessage(`Payment Failed: ${reason}`);
       });
-      onClose();
+
+      rzp.open();
+
+    } catch (err: any) {
+      console.error('Razorpay initialization error:', err);
+      setIsProcessing(false);
+      setIsVerifying(false);
+      setErrorMessage(err.message || 'Could not connect to Razorpay payment gateway.');
     }
   };
 
@@ -98,7 +191,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-[#78716C] hover:text-[#1C1917] p-2 rounded-full hover:bg-[#E8DFC8]/50 transition"
+          disabled={isProcessing || isVerifying}
+          className="absolute top-4 right-4 text-[#78716C] hover:text-[#1C1917] p-2 rounded-full hover:bg-[#E8DFC8]/50 transition disabled:opacity-30"
         >
           <X className="w-6 h-6" />
         </button>
@@ -107,7 +201,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         <div className="text-center space-y-2 mb-6">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#8A1538]/10 text-[#8A1538] border border-[#8A1538]/20 text-xs font-bold">
             <Lock className="w-3.5 h-3.5 text-[#8A1538]" />
-            <span>Secure UPI Payment</span>
+            <span>Razorpay 100% Secure Payment</span>
           </div>
           <h3 className="text-2xl sm:text-3xl font-black font-yatra text-[#8A1538]">
             Unlock Video Generator for ₹11
@@ -123,10 +217,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               <CheckCircle2 className="w-12 h-12" />
             </div>
             <h4 className="text-2xl font-black text-emerald-800">
-              Payment Successful!
+              Payment Verified!
             </h4>
             <p className="text-sm text-[#57534E]">
-              ₹11 received. Your video generator is now unlocked.
+              ₹11 received via Razorpay. Opening Video Generator...
             </p>
           </div>
         ) : (
@@ -144,6 +238,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
             </div>
 
+            {/* Error Message Display */}
+            {errorMessage && (
+              <div className="bg-rose-50 border border-rose-300 p-3.5 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Payment Error</p>
+                  <p className="text-rose-700">{errorMessage}</p>
+                </div>
+              </div>
+            )}
+
             {/* UPI App Selection or QR Code */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               
@@ -160,14 +265,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
                 <div className="flex items-center gap-1 text-[11px] text-[#8A1538] font-bold">
                   <QrCode className="w-3.5 h-3.5" />
-                  <span>Scan with any UPI App</span>
+                  <span>Scan QR / Razorpay Gateway</span>
                 </div>
               </div>
 
               {/* Right Column: Direct App Click */}
               <div className="space-y-2 flex flex-col justify-center">
                 <p className="text-xs font-bold text-[#57534E] mb-1">
-                  Or pay with preferred app:
+                  Supported payment methods:
                 </p>
                 
                 <button
@@ -193,7 +298,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-base">🟣</span> PhonePe
+                    <span className="text-base">🟣</span> PhonePe / UPI
                   </span>
                   {selectedApp === 'phonepe' && <CheckCircle2 className="w-4 h-4 text-[#8A1538]" />}
                 </button>
@@ -207,7 +312,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-base">🔷</span> Paytm / BHIM
+                    <span className="text-base">🔷</span> Paytm / Cards / NetBanking
                   </span>
                   {selectedApp === 'paytm' && <CheckCircle2 className="w-4 h-4 text-[#8A1538]" />}
                 </button>
@@ -216,21 +321,26 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             </div>
 
-            {/* Instant Confirm Payment Action */}
+            {/* Real Razorpay Checkout Action */}
             <div className="pt-2">
               <button
-                onClick={handleVerifyPayment}
-                disabled={isSimulating}
+                onClick={handleInitiatePayment}
+                disabled={isProcessing || isVerifying}
                 className="w-full py-4 bg-[#8A1538] hover:bg-[#700B1A] text-white font-extrabold text-lg rounded-2xl shadow-xl border border-[#C5A059]/40 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                {isSimulating ? (
+                {isProcessing ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Verifying UPI Payment...</span>
+                    <span>Connecting to Razorpay...</span>
+                  </>
+                ) : isVerifying ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Verifying Razorpay Signature...</span>
                   </>
                 ) : (
                   <>
-                    <span>I Have Paid ₹11 (Unlock Studio)</span>
+                    <span>Pay ₹11 with Razorpay</span>
                     <ArrowRight className="w-5 h-5" />
                   </>
                 )}
@@ -240,7 +350,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             {/* Security Footer Notice */}
             <div className="flex items-center justify-center gap-2 text-xs text-[#78716C] text-center pt-2 border-t border-[#E8DFC8]">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>100% Secure • Instant Unlock • Automatic Data Cleanup</span>
+              <span>Razorpay Verified • 100% Encrypted • Official Gateway</span>
             </div>
 
           </div>
@@ -250,3 +360,4 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     </div>
   );
 };
+

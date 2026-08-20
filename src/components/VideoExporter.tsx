@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GreetingFormData, VideoTemplate, PaymentInfo } from '../types';
 import { Download, CheckCircle2, ShieldCheck, X, FileVideo, AlertCircle, ExternalLink } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { apiUrl } from '../utils/api';
 
 interface VideoExporterProps {
   isOpen: boolean;
@@ -71,14 +72,14 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
     }, 350);
 
     try {
-      const res = await fetch('/api/generate-video', {
+      const res = await fetch(apiUrl('/api/generate-video'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateId: template.id,
           name: formData.name,
           photoBase64: formData.photo,
-          paymentToken: paymentInfo?.paymentToken || 'pay_token_local'
+          paymentToken: paymentInfo?.paymentToken || ''
         })
       });
 
@@ -99,8 +100,8 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
         if (!data.success) {
           throw new Error(data.error || 'Video generation was not successful');
         }
-        playUrl = data.videoUrl || data.downloadUrl;
-        downloadUrl = data.downloadUrl;
+        playUrl = apiUrl(data.videoUrl || data.downloadUrl);
+        downloadUrl = apiUrl(data.downloadUrl);
         if (data.filename) {
           finalName = data.filename;
         }

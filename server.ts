@@ -52,14 +52,31 @@ function getFfmpegBinary(): string {
   return 'ffmpeg';
 }
 
+// Enable CORS for cross-origin requests (e.g. Render backend with separate frontend domain)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // Enable JSON body parsing up to 15MB for uploaded photo Base64
 app.use(express.json({ limit: '15mb' }));
 
 // In-memory set of verified payment tokens
 // for server-side payment verification security
-const VERIFIED_PAYMENT_TOKENS = new Set<string>([
-  'pay_token_local',
-]);
+const VERIFIED_PAYMENT_TOKENS = new Set<string>();
+
+// Helper to retrieve Razorpay credentials securely from environment
+function getRazorpayCredentials() {
+  const keyId = (process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '').trim();
+  const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').trim();
+  return { keyId, keySecret };
+}
 
 // Directory for temporarily storing generated MP4 video files
 const GENERATED_VIDEOS_DIR = path.join('/tmp', 'generated_videos');
@@ -97,34 +114,148 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// Endpoint 1: Verify Payment
-app.post('/api/verify-payment', (req, res) => {
-  const {
-    upiRef,
-    templateId,
-    amount,
-  } = req.body;
-
-  // Keep existing functionality.
-  // upiRef is received by the existing API flow.
-  void upiRef;
-
-  // Create a server-side verified payment session token
-  const token =
-    `pay_token_${crypto.randomBytes(16).toString('hex')}`;
-
-  VERIFIED_PAYMENT_TOKENS.add(token);
-
-  console.log(
-    `Payment verified server-side for template: ${templateId}, amount: ₹${amount || 11}`
-  );
-
+// Endpoint: Razorpay Public Config (Key ID only, NEVER Key Secret)
+app.get('/api/razorpay-config', (req, res) => {
+  const { keyId } = getRazorpayCredentials();
   res.json({
-    success: true,
-    paymentToken: token,
-    amount: amount || 11,
-    paidAt: new Date().toISOString(),
+    keyId: keyId || '',
+    configured: Boolean(keyId)
   });
+});
+
+// Endpoint: Create Razorpay Order
+app.post('/api/create-order', async (req, res) => {
+  try {
+    const { amount, templateId } = req.body;
+    const { keyId, keySecret } = getRazorpayCredentials();
+
+    if (!keyId || !keySecret) {
+      console.warn('Razorpay API keys are not configured in environment variables');
+      return res.status(500).json({
+        success: false,
+        error: 'Razorpay Key ID and Key Secret must be configured on the server (e.g. Render environment variables: RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET).'
+      });
+    }
+
+    const numAmount = typeof amount === 'number' ? amount : 11;
+    const amountInPaise = Math.round(numAmount * 100);
+
+    const authHeader = 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+    const orderPayload = {
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: `rcpt_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+      notes: {
+        templateId: templateId || 'template-1',
+        app: 'RakshaBandhanVideoGreetings'
+      }
+    };
+
+    const rzpResponse = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader
+      },
+      body: JSON.stringify(orderPayload)
+    });
+
+    const orderData = await rzpResponse.json();
+
+    if (!rzpResponse.ok) {
+      console.error('Razorpay Order Creation API Error:', orderData);
+      return res.status(rzpResponse.status).json({
+        success: false,
+        error: orderData.error?.description || 'Failed to create Razorpay order.',
+        details: orderData
+      });
+    }
+
+    return res.json({
+      success: true,
+      order: orderData,
+      keyId: keyId
+    });
+  } catch (error: any) {
+    console.error('Create Order Exception:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while creating Razorpay order.',
+      details: error.message
+    });
+  }
+});
+
+// Endpoint: Verify Razorpay Payment Signature
+app.post('/api/verify-payment', (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      templateId,
+      amount
+    } = req.body;
+
+    const { keySecret } = getRazorpayCredentials();
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required Razorpay payment verification parameters (order_id, payment_id, signature).'
+      });
+    }
+
+    if (!keySecret) {
+      console.error('RAZORPAY_KEY_SECRET is not configured on server');
+      return res.status(500).json({
+        success: false,
+        error: 'Razorpay Key Secret is missing on the server environment.'
+      });
+    }
+
+    // Verify HMAC-SHA256 signature using RAZORPAY_KEY_SECRET
+    const hmac = crypto.createHmac('sha256', keySecret);
+    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const expectedSignature = hmac.digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      console.error('Razorpay Signature Verification Failed!', {
+        received: razorpay_signature,
+        expected: expectedSignature,
+        orderId: razorpay_order_id,
+        paymentId: razorpay_payment_id
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'Payment verification failed: Invalid Razorpay signature.'
+      });
+    }
+
+    // Create a server-side verified payment session token
+    const token = `pay_token_${crypto.randomBytes(16).toString('hex')}`;
+    VERIFIED_PAYMENT_TOKENS.add(token);
+
+    console.log(
+      `Razorpay payment successfully verified for template: ${templateId}, Payment ID: ${razorpay_payment_id}, Order ID: ${razorpay_order_id}`
+    );
+
+    return res.json({
+      success: true,
+      paymentToken: token,
+      paymentId: razorpay_payment_id,
+      orderId: razorpay_order_id,
+      amount: amount || 11,
+      paidAt: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error('Payment Verification Server Exception:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error during payment verification.',
+      details: err.message
+    });
+  }
 });
 
 // Helper for automatic font sizing based on name length
