@@ -586,6 +586,7 @@ app.post(
   '/api/generate-video',
   async (req, res) => {
     console.log('🔥 GENERATE VIDEO REQUEST RECEIVED');
+    console.log('TEST 123 - CODE UPDATE WORKING');
     let tempDir = '';
 
     try {
@@ -976,7 +977,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
       const safeFontDir = fontDir.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
 
       const ffmpegCmdPrimary =
-        `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -profile:v high -level:v 4.1 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
+        `"${ffmpegBin}" -nostdin -threads 1 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
 
       let renderSuccess = false;
 
