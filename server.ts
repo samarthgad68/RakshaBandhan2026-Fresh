@@ -371,43 +371,53 @@ function calculateAssFontSize(name: string): number {
 }
 
 function getFontFamilyForText(text: string): string {
-  if (/[\u0900-\u097F]/.test(text)) {
+  // Devanagari (Hindi, Marathi, Sanskrit, Konkani, Nepali, Maithili, Bhojpuri, etc.)
+  if (/[\u0900-\u097F\uA8E0-\uA8FF\u1CD0-\u1CFF]/.test(text)) {
     return 'Noto Sans Devanagari';
   }
 
+  // Gujarati
   if (/[\u0A80-\u0AFF]/.test(text)) {
     return 'Noto Sans Gujarati';
   }
 
+  // Bengali & Assamese
   if (/[\u0980-\u09FF]/.test(text)) {
     return 'Noto Sans Bengali';
   }
 
-  if (/[\u0B80-\u0BFF]/.test(text)) {
-    return 'Noto Sans Tamil';
-  }
-
-  if (/[\u0C00-\u0C7F]/.test(text)) {
-    return 'Noto Sans Telugu';
-  }
-
-  if (/[\u0C80-\u0CFF]/.test(text)) {
-    return 'Noto Sans Kannada';
-  }
-
-  if (/[\u0D00-\u0D7F]/.test(text)) {
-    return 'Noto Sans Malayalam';
-  }
-
+  // Punjabi / Gurmukhi
   if (/[\u0A00-\u0A7F]/.test(text)) {
     return 'Noto Sans Gurmukhi';
   }
 
+  // Odia / Oriya
   if (/[\u0B00-\u0B7F]/.test(text)) {
     return 'Noto Sans Oriya';
   }
 
-  if (/[\u0600-\u06FF]/.test(text)) {
+  // Tamil
+  if (/[\u0B80-\u0BFF]/.test(text)) {
+    return 'Noto Sans Tamil';
+  }
+
+  // Telugu
+  if (/[\u0C00-\u0C7F]/.test(text)) {
+    return 'Noto Sans Telugu';
+  }
+
+  // Kannada
+  if (/[\u0C80-\u0CFF]/.test(text)) {
+    return 'Noto Sans Kannada';
+  }
+
+  // Malayalam
+  if (/[\u0D00-\u0D7F]/.test(text)) {
+    return 'Noto Sans Malayalam';
+  }
+
+  // Arabic / Urdu / Sindhi / Persian
+  if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)) {
     return 'Noto Sans Arabic';
   }
 

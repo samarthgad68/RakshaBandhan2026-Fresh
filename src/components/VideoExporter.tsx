@@ -241,6 +241,11 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
               <span className="text-sm font-extrabold text-[#8A1538]">
                 {progress}% Complete
               </span>
+
+              {/* Progress Warning Message */}
+              <p className="text-xs sm:text-sm font-semibold text-[#8A1538] bg-[#8A1538]/10 border border-[#8A1538]/20 rounded-2xl p-3 leading-relaxed">
+                कृपया Back न जाएँ और Internet connection मजबूत रखें। Video तैयार होने तक इस पेज को खुला रखें।
+              </p>
             </>
           ) : (
             <>

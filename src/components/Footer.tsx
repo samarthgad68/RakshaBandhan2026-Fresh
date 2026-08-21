@@ -113,7 +113,8 @@ export const Footer: React.FC = () => {
                 <p className="text-xs text-[#57534E] leading-relaxed">
                   1. Uploaded photos are used strictly for personalizing your video.<br />
                   2. ₹11 payment covers server video processing and HD output.<br />
-                  3. Users must own or have permission to use the uploaded photo.
+                  3. Users must own or have permission to use the uploaded photo.<br />
+                  4. यदि आपका Internet connection कमजोर है, Network या Server Slow होने के कारण Video Generate नहीं होता है, या आप Video Generate होने से पहले Back जाते हैं, तो इसके लिए हम जिम्मेदार नहीं होंगे।
                 </p>
               </div>
             )}
@@ -134,7 +135,8 @@ export const Footer: React.FC = () => {
                 <p className="text-xs text-[#57534E] leading-relaxed">
                   1. We do NOT store your photos or personal data on our servers.<br />
                   2. All temporary files are permanently purged immediately after video generation.<br />
-                  3. We never sell, share, or monetize user data.
+                  3. We never sell, share, or monetize user data.<br />
+                  4. यदि आपका Internet connection कमजोर है, Network या Server Slow होने के कारण Video Generate नहीं होता है, या आप Video Generate होने से पहले Back जाते हैं, तो इसके लिए हम जिम्मेदार नहीं होंगे।
                 </p>
               </div>
             )}
