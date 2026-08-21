@@ -585,6 +585,7 @@ function getFontStyles(): string {
 app.post(
   '/api/generate-video',
   async (req, res) => {
+    console.log('🔥 GENERATE VIDEO REQUEST RECEIVED');
     let tempDir = '';
 
     try {
