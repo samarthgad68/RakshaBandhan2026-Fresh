@@ -245,14 +245,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
         {/* Modal Header */}
         <div className="text-center space-y-2 mb-6">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#8A1538]/10 text-[#8A1538] border border-[#8A1538]/20 text-xs font-bold">
-            <Lock className="w-3.5 h-3.5 text-[#8A1538]" />
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#8A1538]/10 text-[#8A1538] border border-[#8A1538]/20 text-xs sm:text-sm font-bold">
+            <Lock className="w-4 h-4 text-[#8A1538]" />
             <span>Razorpay 100% Secure Payment</span>
           </div>
           <h3 className="text-2xl sm:text-3xl font-black font-yatra text-[#8A1538]">
             Unlock Video Generator for ₹11
           </h3>
-          <p className="text-xs text-[#78716C]">
+          <p className="text-sm text-[#78716C]">
             Selected Template: <span className="font-bold text-[#8A1538]">{templateName}</span>
           </p>
         </div>
@@ -262,10 +262,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             <div className="w-20 h-20 bg-emerald-100 border-2 border-emerald-500 rounded-full flex items-center justify-center mx-auto text-emerald-700 animate-bounce">
               <CheckCircle2 className="w-12 h-12" />
             </div>
-            <h4 className="text-2xl font-black text-emerald-800">
+            <h4 className="text-2xl sm:text-3xl font-black text-emerald-800">
               Payment Verified!
             </h4>
-            <p className="text-sm text-[#57534E]">
+            <p className="text-base text-[#57534E]">
               ₹11 received via Razorpay. Opening Video Generator...
             </p>
           </div>
@@ -275,19 +275,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             {/* Amount Banner */}
             <div className="bg-gradient-to-r from-[#F5EFE6] via-white to-[#F5EFE6] p-4 rounded-2xl border border-[#E8DFC8] flex items-center justify-between shadow-sm">
               <div>
-                <p className="text-xs text-[#78716C] font-bold">Total Amount</p>
-                <p className="text-xs text-[#A8A29E]">Includes 1080×1920 HD Personalization</p>
+                <p className="text-sm font-bold text-[#1C1917]">Total Amount</p>
+                <p className="text-xs sm:text-sm text-[#78716C]">Includes 1080×1920 HD Personalization</p>
               </div>
               <div className="text-right">
-                <span className="text-3xl font-black text-[#8A1538]">₹11</span>
-                <span className="text-xs text-[#8A1538] block font-bold">Only</span>
+                <span className="text-3xl sm:text-4xl font-black text-[#8A1538]">₹11</span>
+                <span className="text-xs sm:text-sm text-[#8A1538] block font-bold">Only</span>
               </div>
             </div>
 
             {/* Error Message Display */}
             {errorMessage && (
-              <div className="bg-rose-50 border border-rose-300 p-3.5 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+              <div className="bg-rose-50 border border-rose-300 p-4 rounded-2xl flex items-start gap-3 text-sm text-rose-800">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 mt-0.5" />
                 <div className="space-y-1">
                   <p className="font-bold">Payment Error</p>
                   <p className="text-rose-700">{errorMessage}</p>
@@ -309,21 +309,21 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1 text-[11px] text-[#8A1538] font-bold">
-                  <QrCode className="w-3.5 h-3.5" />
+                <div className="flex items-center gap-1.5 text-xs text-[#8A1538] font-bold">
+                  <QrCode className="w-4 h-4" />
                   <span>Scan QR / Razorpay Gateway</span>
                 </div>
               </div>
 
               {/* Right Column: Direct App Click */}
-              <div className="space-y-2 flex flex-col justify-center">
-                <p className="text-xs font-bold text-[#57534E] mb-1">
+              <div className="space-y-2.5 flex flex-col justify-center">
+                <p className="text-xs sm:text-sm font-bold text-[#57534E] mb-1">
                   Supported payment methods:
                 </p>
                 
                 <button
                   onClick={() => setSelectedApp('gpay')}
-                  className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs font-bold ${
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'gpay'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'
@@ -337,7 +337,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                 <button
                   onClick={() => setSelectedApp('phonepe')}
-                  className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs font-bold ${
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'phonepe'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'
@@ -351,14 +351,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                 <button
                   onClick={() => setSelectedApp('paytm')}
-                  className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs font-bold ${
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'paytm'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-base">🔷</span> Paytm / Cards / NetBanking
+                    <span className="text-base">🔷</span> Paytm / Cards / UPI
                   </span>
                   {selectedApp === 'paytm' && <CheckCircle2 className="w-4 h-4 text-[#8A1538]" />}
                 </button>
@@ -372,7 +372,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               <button
                 onClick={handleInitiatePayment}
                 disabled={isProcessing || isVerifying}
-                className="w-full py-4 bg-[#8A1538] hover:bg-[#700B1A] text-white font-extrabold text-lg rounded-2xl shadow-xl border border-[#C5A059]/40 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-4 bg-[#8A1538] hover:bg-[#700B1A] text-white font-extrabold text-lg sm:text-xl rounded-2xl shadow-xl border border-[#C5A059]/40 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isProcessing ? (
                   <>
@@ -394,7 +394,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
 
             {/* Security Footer Notice */}
-            <div className="flex items-center justify-center gap-2 text-xs text-[#78716C] text-center pt-2 border-t border-[#E8DFC8]">
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-[#78716C] text-center pt-2 border-t border-[#E8DFC8]">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>Razorpay Verified • 100% Encrypted • Official Gateway</span>
             </div>

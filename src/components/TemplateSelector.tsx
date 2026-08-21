@@ -6,11 +6,13 @@ import { Sparkles, CheckCircle, ArrowRight, Video, Volume2, VolumeX } from 'luci
 interface TemplateSelectorProps {
   onSelectTemplate: (template: VideoTemplate) => void;
   selectedTemplateId: TemplateThemeId;
+  onBackToHome?: () => void;
 }
 
 export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   onSelectTemplate,
-  selectedTemplateId
+  selectedTemplateId,
+  onBackToHome,
 }) => {
   const [unmutedVideoId, setUnmutedVideoId] = useState<string | null>(null);
 
@@ -23,10 +25,22 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     <section id="templates-section" className="py-12 bg-[#FAF7F2] border-b border-[#E8DFC8]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
+        {/* Top Navigation if available */}
+        {onBackToHome && (
+          <div className="mb-6 flex items-center justify-start">
+            <button
+              onClick={onBackToHome}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#E8DFC8] rounded-xl text-xs sm:text-sm font-bold text-[#8A1538] hover:bg-[#F5EFE6] transition shadow-sm cursor-pointer"
+            >
+              ← Back to Home
+            </button>
+          </div>
+        )}
+
         {/* Section Header - Minimal, High-Impact All-India Title */}
         <div className="text-center max-w-3xl mx-auto mb-10 space-y-3">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#8A1538]/10 border border-[#8A1538]/20 text-[#8A1538] text-xs font-bold">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#8A1538]/10 border border-[#8A1538]/20 text-[#8A1538] text-sm font-bold">
+            <Sparkles className="w-4 h-4" />
             <span>13 HD Video Templates • Only ₹11</span>
           </div>
           
@@ -34,7 +48,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             Personalized Raksha Bandhan Video
           </h2>
           
-          <p className="text-[#57534E] text-base sm:text-lg font-medium">
+          <p className="text-[#57534E] text-base sm:text-xl font-medium">
             Add your photo & name to create your special Raksha Bandhan video.
           </p>
         </div>
@@ -58,7 +72,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 
                 {/* Badge Tag */}
                 <div className="absolute top-3 left-3 z-20">
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#8A1538] text-white shadow-md">
+                  <span className="px-3.5 py-1 rounded-full text-xs sm:text-sm font-bold bg-[#8A1538] text-white shadow-md">
                     {tpl.badge}
                   </span>
                 </div>
@@ -73,13 +87,13 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 {/* Audio Toggle Button */}
                 <button
                   onClick={(e) => toggleSound(e, tpl.id)}
-                  className="absolute bottom-16 right-3 z-20 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full backdrop-blur-md border border-white/20 transition"
+                  className="absolute bottom-16 right-3 z-20 bg-black/60 hover:bg-black/80 text-white p-2.5 rounded-full backdrop-blur-md border border-white/20 transition"
                   title={isUnmuted ? "Mute" : "Unmute preview"}
                 >
                   {isUnmuted ? (
-                    <Volume2 className="w-4 h-4 text-emerald-400" />
+                    <Volume2 className="w-5 h-5 text-emerald-400" />
                   ) : (
-                    <VolumeX className="w-4 h-4 text-gray-300" />
+                    <VolumeX className="w-5 h-5 text-gray-300" />
                   )}
                 </button>
 
@@ -98,15 +112,15 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
                   {/* Quality Spec Tag */}
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-[10px] text-amber-200 font-bold tracking-wider">
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-xs text-amber-200 font-bold tracking-wider">
                     1080×1920 HD
                   </div>
                 </div>
 
                 {/* Card Title & CTA */}
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-3 bg-white">
+                <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3.5 bg-white">
                   <div>
-                    <h3 className="text-base font-bold text-[#1C1917] truncate">
+                    <h3 className="text-base sm:text-lg font-bold text-[#1C1917] truncate">
                       {tpl.name}
                     </h3>
                   </div>
@@ -117,7 +131,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                       e.stopPropagation();
                       onSelectTemplate(tpl);
                     }}
-                    className={`w-full py-3 rounded-2xl font-black text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                    className={`w-full py-3.5 rounded-2xl font-black text-sm sm:text-base transition flex items-center justify-center gap-2 cursor-pointer shadow-md ${
                       isSelected
                         ? 'bg-[#8A1538] text-white hover:bg-[#700B1A]'
                         : 'bg-[#FAF7F2] text-[#8A1538] border border-[#8A1538]/40 hover:bg-[#8A1538] hover:text-white'

@@ -104,14 +104,14 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
             <h2 className="text-2xl sm:text-3xl font-extrabold font-laila text-[#8A1538]">
               Personalize Your Greeting Video
             </h2>
-            <p className="text-xs sm:text-sm text-[#78716C]">
+            <p className="text-sm sm:text-base text-[#78716C]">
               Upload a photo and enter your name to create your HD MP4 video.
             </p>
           </div>
 
           {/* Input 1: Photo Upload */}
           <div className="space-y-3">
-            <label className="block text-sm font-extrabold text-[#1C1917]">
+            <label className="block text-base font-extrabold text-[#1C1917]">
               1. Upload Photo
             </label>
 
@@ -126,11 +126,11 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
               </div>
 
               <div className="space-y-2 flex-1">
-                <p className="text-xs text-[#78716C] font-medium">
+                <p className="text-sm text-[#57534E] font-medium">
                   Select a photo (JPG, PNG, WebP) to crop into the video frame.
                 </p>
                 
-                <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#8A1538] hover:bg-[#700B1A] text-white text-xs font-extrabold rounded-xl cursor-pointer shadow-md transition hover:scale-105 active:scale-95">
+                <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#8A1538] hover:bg-[#700B1A] text-white text-sm font-extrabold rounded-xl cursor-pointer shadow-md transition hover:scale-105 active:scale-95">
                   <Upload className="w-4 h-4" />
                   <span>Choose Photo</span>
                   <input
@@ -146,7 +146,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
 
           {/* Input 2: Your Name */}
           <div className="space-y-2">
-            <label className="block text-sm font-extrabold text-[#1C1917]">
+            <label className="block text-base font-extrabold text-[#1C1917]">
               2. Your Name
             </label>
 
@@ -160,10 +160,10 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Enter name (e.g. Rohan / Ananya / प्रिय भाऊ)"
                 maxLength={30}
-                className="w-full pl-11 pr-4 py-3.5 bg-[#FAF7F2] border border-[#C5A059]/50 rounded-2xl text-[#1C1917] font-bold text-base focus:border-[#8A1538] focus:outline-none focus:ring-2 focus:ring-[#8A1538]/20 transition font-devanagari"
+                className="w-full pl-11 pr-4 py-3.5 bg-[#FAF7F2] border border-[#C5A059]/50 rounded-2xl text-[#1C1917] font-bold text-base sm:text-lg focus:border-[#8A1538] focus:outline-none focus:ring-2 focus:ring-[#8A1538]/20 transition font-devanagari"
               />
             </div>
-            <p className="text-[11px] text-[#78716C]">
+            <p className="text-xs sm:text-sm text-[#78716C]">
               Supports English, Devanagari, Hindi, Marathi, Gujarati & Unicode scripts.
             </p>
           </div>
@@ -173,7 +173,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
             {isPaid ? (
               <button
                 onClick={() => onGenerateAndDownload(formData)}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-lg rounded-2xl shadow-xl shadow-emerald-600/20 transition hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-lg sm:text-xl rounded-2xl shadow-xl shadow-emerald-600/20 transition hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Download className="w-6 h-6 text-white" />
                 <span>Download Video (HD MP4)</span>
@@ -181,7 +181,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
             ) : (
               <button
                 onClick={() => onGenerateAndDownload(formData)}
-                className="w-full py-4 bg-[#8A1538] hover:bg-[#700B1A] text-white font-extrabold text-lg rounded-2xl shadow-xl shadow-[#8A1538]/20 transition hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-4 bg-[#8A1538] hover:bg-[#700B1A] text-white font-extrabold text-lg sm:text-xl rounded-2xl shadow-xl shadow-[#8A1538]/20 transition hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Sparkles className="w-6 h-6 text-yellow-300" />
                 <span>Generate Video</span>
@@ -189,14 +189,14 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
             )}
 
             {!isPaid && (
-              <p className="text-center text-xs font-bold text-[#8A1538]">
+              <p className="text-center text-sm font-bold text-[#8A1538]">
                 🔒 Unlimited HD MP4 downloads available for only ₹11
               </p>
             )}
           </div>
 
           {/* Privacy Guarantee Notice */}
-          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2 shadow-sm">
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-800 flex items-center gap-2.5 shadow-sm">
             <ShieldCheck className="w-5 h-5 shrink-0 text-emerald-600" />
             <span>Your photo is encrypted and automatically deleted immediately after video generation.</span>
           </div>

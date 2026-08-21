@@ -42,22 +42,52 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
     generateVideoOnServer();
   }, [isOpen]);
 
-  const triggerDirectDownload = (url: string, filename: string) => {
+  const triggerDirectDownload = async (url: string, filename: string) => {
     try {
+      if (url.startsWith('blob:') || url.startsWith('data:')) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          try {
+            document.body.removeChild(a);
+          } catch {}
+        }, 300);
+        return;
+      }
+
+      // Fetch the binary file directly to ensure clean, untruncated MP4 download
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(objectUrl);
+        } catch {}
+      }, 5000);
+    } catch (e) {
+      console.warn('Direct blob download fallback:', e);
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       setTimeout(() => {
         try {
           document.body.removeChild(a);
         } catch {}
-      }, 200);
-    } catch (e) {
-      console.warn('Programmatic download trigger notification:', e);
+      }, 300);
     }
   };
 
@@ -233,7 +263,7 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
                     playsInline
                     className="w-full max-h-[360px] rounded-2xl border-2 border-[#C5A059] bg-black object-contain shadow-lg mx-auto"
                   />
-                  <p className="text-xs text-[#57534E]">
+                  <p className="text-sm font-medium text-[#57534E]">
                     Preview your personalized video above.
                   </p>
                 </div>
@@ -242,35 +272,19 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
               {/* Download Button Directly Below The Video */}
               <button
                 onClick={handleDownloadFile}
-                className="w-full py-4 bg-[#8A1538] hover:bg-[#700B1A] text-white font-black text-lg rounded-2xl shadow-xl shadow-[#8A1538]/20 transition hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-2"
+                className="w-full py-4 bg-[#8A1538] hover:bg-[#700B1A] text-white font-black text-lg sm:text-xl rounded-2xl shadow-xl shadow-[#8A1538]/20 transition hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-2"
               >
                 <Download className="w-6 h-6 text-white" />
                 <span>Download HD MP4 Video</span>
               </button>
 
-              {/* Direct Link Fallback */}
-              {serverDownloadUrl && (
-                <div className="pt-1">
-                  <a
-                    href={serverDownloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download={downloadFilename}
-                    className="inline-flex items-center gap-1.5 text-xs text-[#8A1538] hover:underline font-bold"
-                  >
-                    <span>Direct Download Link</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              )}
-
               {/* Data Privacy & Auto Delete Notice */}
-              <div className="bg-white p-3.5 rounded-2xl border border-emerald-600/30 text-xs text-emerald-900 text-left space-y-1 mt-3 shadow-sm">
-                <div className="flex items-center gap-1.5 font-bold text-emerald-700">
-                  <ShieldCheck className="w-4 h-4 shrink-0" />
-                  <span>Privacy & Security Guarantee:</span>
+              <div className="bg-white p-4 rounded-2xl border border-emerald-600/30 text-sm text-emerald-900 text-left space-y-1.5 mt-3 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-emerald-700">
+                  <ShieldCheck className="w-5 h-5 shrink-0" />
+                  <span className="text-sm font-bold">Privacy & Security Guarantee:</span>
                 </div>
-                <p className="text-[11px] text-[#57534E] leading-normal">
+                <p className="text-xs sm:text-sm text-[#57534E] leading-relaxed">
                   Your uploaded photo and temporary working files have been 100% automatically deleted from server memory. 🔒
                 </p>
               </div>

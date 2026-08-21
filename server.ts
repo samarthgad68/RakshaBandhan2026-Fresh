@@ -362,12 +362,12 @@ app.post('/api/confirm-upi-payment', (req, res) => {
 function calculateAssFontSize(name: string): number {
   const len = name.length;
 
-  if (len <= 6) return 80;
-  if (len <= 10) return 70;
-  if (len <= 15) return 60;
-  if (len <= 20) return 50;
+  if (len <= 6) return 150;
+  if (len <= 10) return 118;
+  if (len <= 15) return 108;
+  if (len <= 20) return 98;
 
-  return 42;
+  return 89;
 }
 
 function getFontFamilyForText(text: string): string {
@@ -807,7 +807,7 @@ Style: Default,${fontName},${assFontSize},&H00FFFFFF,&H000000FF,&H0015158A,&H800
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${assSafeName}
+Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSafeName}
 `;
 
       fs.writeFileSync(
@@ -975,7 +975,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${assSafeNa
       const safeFontDir = fontDir.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
 
       const ffmpegCmdPrimary =
-        `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a copy "${outputMp4Path}"`;
+        `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -profile:v high -level:v 4.1 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
 
       let renderSuccess = false;
 
@@ -992,7 +992,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${assSafeNa
       if (!renderSuccess) {
         try {
           const ffmpegCmdFallback =
-            `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a copy "${outputMp4Path}"`;
+            `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -profile:v high -level:v 4.1 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
 
           execSync(ffmpegCmdFallback, { stdio: 'pipe' });
           if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
@@ -1006,7 +1006,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${assSafeNa
       // Last-resort transcode
       if (!renderSuccess) {
         const ffmpegCmdSafe =
-          `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -pix_fmt yuv420p "${outputMp4Path}"`;
+          `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
 
         execSync(ffmpegCmdSafe, { stdio: 'pipe' });
       }

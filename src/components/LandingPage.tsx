@@ -1,13 +1,19 @@
 import React from 'react';
-import { Gift, Sparkles, ShieldCheck, Zap, Heart } from 'lucide-react';
+import { Gift, Sparkles, ShieldCheck, Film } from 'lucide-react';
 
 interface LandingPageProps {
   onUnlockClick: () => void;
+  onOpenGenerator: () => void;
+  isPaid: boolean;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onUnlockClick }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({
+  onUnlockClick,
+  onOpenGenerator,
+  isPaid,
+}) => {
   return (
-    <section className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto flex flex-col items-center justify-center text-center space-y-8 min-h-[70vh]">
+    <section className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto flex flex-col items-center justify-center text-center space-y-10 min-h-[70vh]">
       
       {/* Decorative Glow & Top Badge */}
       <div className="relative w-full">
@@ -16,7 +22,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onUnlockClick }) => {
         <div className="relative z-10 space-y-6">
           
           {/* Tagline */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#8A1538]/10 border border-[#8A1538]/20 text-[#8A1538] text-xs sm:text-sm font-bold shadow-sm">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#8A1538]/10 border border-[#8A1538]/20 text-[#8A1538] text-sm sm:text-base font-bold shadow-sm">
             <Sparkles className="w-4 h-4 text-[#8A1538]" />
             <span>Special Festival Offer • Instant Delivery</span>
           </div>
@@ -39,20 +45,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onUnlockClick }) => {
             अपना फोटो और नाम के साथ अपना Digital Gift पाएं ❤️
           </p>
 
-          {/* Prominent Action Button: UNLOCK GIFT – ₹11/- */}
+          {/* Prominent Action Button */}
           <div className="pt-4 max-w-md mx-auto w-full">
-            <button
-              onClick={onUnlockClick}
-              id="unlock-gift-btn"
-              className="w-full py-5 px-8 bg-gradient-to-r from-[#8A1538] via-[#A81B45] to-[#8A1538] hover:from-[#700B1A] hover:to-[#700B1A] text-white text-xl sm:text-2xl font-black rounded-3xl shadow-2xl shadow-[#8A1538]/40 border-2 border-[#C5A059] hover:scale-[1.03] active:scale-95 transition-all duration-300 cursor-pointer flex items-center justify-center gap-3 group"
-            >
-              <Gift className="w-7 h-7 text-amber-200 group-hover:rotate-12 transition-transform" />
-              <span>
-                UNLOCK GIFT – <span className="text-amber-300 font-extrabold tracking-wide">₹11/-</span>
-              </span>
-            </button>
-            <p className="text-xs text-[#78716C] mt-2.5 font-medium">
-              🔒 Instant access to all HD video greeting templates via UPI
+            {isPaid ? (
+              <button
+                onClick={onOpenGenerator}
+                id="open-generator-btn"
+                className="w-full py-5 px-8 bg-gradient-to-r from-[#8A1538] via-[#A81B45] to-[#8A1538] hover:from-[#700B1A] hover:to-[#700B1A] text-white text-xl sm:text-2xl font-black rounded-3xl shadow-2xl shadow-[#8A1538]/40 border-2 border-[#C5A059] hover:scale-[1.03] active:scale-95 transition-all duration-300 cursor-pointer flex items-center justify-center gap-3 group"
+              >
+                <Film className="w-7 h-7 text-amber-200 group-hover:rotate-12 transition-transform" />
+                <span>
+                  OPEN VIDEO GENERATOR 🚀
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={onUnlockClick}
+                id="unlock-gift-btn"
+                className="w-full py-5 px-8 bg-gradient-to-r from-[#8A1538] via-[#A81B45] to-[#8A1538] hover:from-[#700B1A] hover:to-[#700B1A] text-white text-xl sm:text-2xl font-black rounded-3xl shadow-2xl shadow-[#8A1538]/40 border-2 border-[#C5A059] hover:scale-[1.03] active:scale-95 transition-all duration-300 cursor-pointer flex items-center justify-center gap-3 group"
+              >
+                <Gift className="w-7 h-7 text-amber-200 group-hover:rotate-12 transition-transform" />
+                <span>
+                  UNLOCK GIFT – <span className="text-amber-300 font-extrabold tracking-wide">₹11/-</span>
+                </span>
+              </button>
+            )}
+
+            <p className="text-sm text-[#78716C] mt-3 font-semibold">
+              {isPaid
+                ? '✅ Studio Access Unlocked • Click to open Video Generator'
+                : '🔒 Instant access to all HD video greeting templates via UPI'}
             </p>
           </div>
 
@@ -60,17 +82,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onUnlockClick }) => {
       </div>
 
       {/* Feature Highlights Minimal Pills */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-lg text-xs font-bold text-[#57534E] pt-4">
-        <div className="p-3 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 w-full max-w-lg text-sm sm:text-base font-bold text-[#57534E] pt-2">
+        <div className="p-3.5 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
           <span>📹</span>
           <span>1080×1920 Full HD</span>
         </div>
-        <div className="p-3 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
+        <div className="p-3.5 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
           <span>⚡</span>
           <span>Instant Download</span>
         </div>
-        <div className="col-span-2 sm:col-span-1 p-3 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+        <div className="col-span-2 sm:col-span-1 p-3.5 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-emerald-600" />
           <span>100% Safe & Secure</span>
         </div>
       </div>
