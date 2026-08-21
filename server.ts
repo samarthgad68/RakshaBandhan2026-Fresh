@@ -35,8 +35,13 @@ const PORT: number =
     ? parseInt(portVal, 10)
     : (portVal || 3000);
 
-// Resolve binary path for FFmpeg (bundled ffmpeg-static or system ffmpeg)
+// Resolve binary path for FFmpeg (system ffmpeg or bundled ffmpeg-static)
 function getFfmpegBinary(): string {
+  try {
+    execSync('ffmpeg -version', { stdio: 'ignore' });
+    return 'ffmpeg';
+  } catch {}
+
   try {
     const staticPath = (ffmpegStatic as any)?.default || ffmpegStatic;
 
@@ -70,6 +75,46 @@ app.use(express.json({ limit: '15mb' }));
 // In-memory set of verified payment tokens
 // for server-side payment verification security
 const VERIFIED_PAYMENT_TOKENS = new Set<string>();
+
+// Dynamic signing key for resilient session tokens (valid across restarts and load balancers)
+const PAYMENT_SIGNING_SALT = process.env.RAZORPAY_KEY_SECRET || 'rb_video_secure_payment_salt_2026';
+
+function createPaymentSessionToken(paymentId: string): string {
+  const rand = crypto.randomBytes(12).toString('hex');
+  const timestamp = Date.now().toString();
+  const payload = `${rand}.${timestamp}.${paymentId || 'pay'}`;
+  const sig = crypto.createHmac('sha256', PAYMENT_SIGNING_SALT).update(payload).digest('hex').substring(0, 32);
+  const token = `pay_token_${payload}.${sig}`;
+  VERIFIED_PAYMENT_TOKENS.add(token);
+  return token;
+}
+
+function validatePaymentSessionToken(token: string): boolean {
+  if (!token || typeof token !== 'string') return false;
+  if (VERIFIED_PAYMENT_TOKENS.has(token)) return true;
+
+  if (token.startsWith('pay_token_')) {
+    const withoutPrefix = token.substring('pay_token_'.length);
+    const lastDot = withoutPrefix.lastIndexOf('.');
+    if (lastDot === -1) return false;
+    const payload = withoutPrefix.substring(0, lastDot);
+    const sig = withoutPrefix.substring(lastDot + 1);
+
+    const parts = payload.split('.');
+    if (parts.length < 3) return false;
+    const timestamp = parseInt(parts[1], 10);
+    // Token valid for 72 hours
+    if (isNaN(timestamp) || Date.now() - timestamp > 72 * 60 * 60 * 1000) {
+      return false;
+    }
+    const expectedSig = crypto.createHmac('sha256', PAYMENT_SIGNING_SALT).update(payload).digest('hex').substring(0, 32);
+    if (expectedSig === sig) {
+      VERIFIED_PAYMENT_TOKENS.add(token);
+      return true;
+    }
+  }
+  return false;
+}
 
 // Helper to retrieve Razorpay credentials securely from environment
 function getRazorpayCredentials() {
@@ -233,8 +278,7 @@ app.post('/api/verify-payment', (req, res) => {
     }
 
     // Create a server-side verified payment session token
-    const token = `pay_token_${crypto.randomBytes(16).toString('hex')}`;
-    VERIFIED_PAYMENT_TOKENS.add(token);
+    const token = createPaymentSessionToken(razorpay_payment_id);
 
     console.log(
       `Razorpay payment successfully verified for template: ${templateId}, Payment ID: ${razorpay_payment_id}, Order ID: ${razorpay_order_id}`
@@ -498,7 +542,7 @@ app.post(
       // 1. Validate payment token server-side
       if (
         !paymentToken ||
-        !VERIFIED_PAYMENT_TOKENS.has(paymentToken)
+        !validatePaymentSessionToken(paymentToken)
       ) {
         return res.status(403).json({
           error:
@@ -643,25 +687,26 @@ app.post(
         getFfmpegBinary();
 
       const circlePhotoCmd =
-        `"${ffmpegBin}" -y -i "${photoImgPath}" -filter_complex "[0:v]scale=818:818:force_original_aspect_ratio=increase,crop=818:818,format=yuva444p,geq=lum_expr='p(X,Y)':cb_expr='p(X,Y)':cr_expr='p(X,Y)':alpha_expr='if(lte(hypot(X-409,Y-409),409),255,0)'[circle]" -map "[circle]" "${photoCirclePath}"`;
+        `"${ffmpegBin}" -nostdin -y -i "${photoImgPath}" -filter_complex "[0:v]scale=818:818:force_original_aspect_ratio=increase,crop=818:818,format=yuva444p,geq=lum_expr='p(X,Y)':cb_expr='p(X,Y)':cr_expr='p(X,Y)':alpha_expr='if(lte(hypot(X-409,Y-409),409),255,0)'[circle]" -map "[circle]" -vframes 1 "${photoCirclePath}"`;
 
-      execSync(
-        circlePhotoCmd,
-        {
-          stdio: 'pipe',
-        }
-      );
+      execSync(circlePhotoCmd, { stdio: 'pipe' });
+
+      if (!fs.existsSync(photoCirclePath) || fs.statSync(photoCirclePath).size < 500) {
+        throw new Error('Failed to process and crop user photo into circular frame.');
+      }
 
       // 2. Build ASS Subtitle File
       // for multilingual Unicode accurate text
+      const assSafeName = sanitizedName.replace(/[\r\n\t\{\}\\]/g, ' ').trim() || 'प्रिय भाऊ';
+
       const fontName =
         getFontFamilyForText(
-          sanitizedName
+          assSafeName
         );
 
       const assFontSize =
         calculateAssFontSize(
-          sanitizedName
+          assSafeName
         );
 
       const assFilePath =
@@ -682,7 +727,7 @@ Style: Default,${fontName},${assFontSize},&H00FFFFFF,&H000000FF,&H0015158A,&H800
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${sanitizedName}
+Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${assSafeName}
 `;
 
       fs.writeFileSync(
@@ -846,7 +891,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${sanitized
         getFontDir();
 
       const ffmpegCmd =
-        `"${ffmpegBin}" -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${assFilePath}':fontsdir='${fontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset superfast -crf 23 -pix_fmt yuv420p -c:a copy "${outputMp4Path}"`;
+        `"${ffmpegBin}" -nostdin -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${assFilePath}':fontsdir='${fontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset superfast -crf 23 -pix_fmt yuv420p -c:a copy "${outputMp4Path}"`;
 
       execSync(
         ffmpegCmd,
@@ -916,8 +961,10 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${sanitized
       });
 
     } catch (error: any) {
+      const errDetail = error?.stderr ? error.stderr.toString() : (error?.message || 'Unknown video processing error');
       console.error(
         'Video Generation Server Error:',
+        errDetail,
         error
       );
 
@@ -931,7 +978,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${sanitized
         error:
           'Video generation failed.',
         details:
-          error.message,
+          errDetail,
       });
     }
   }
