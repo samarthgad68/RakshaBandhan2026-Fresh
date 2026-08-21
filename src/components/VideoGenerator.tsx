@@ -33,20 +33,47 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     }));
   }, [template]);
 
-  // Handle single photo upload
+  // Handle single photo upload with automatic high-quality optimization
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Photo size should be less than 10MB.');
-      return;
-    }
-
+    // Support large camera photos by resizing on client canvas to crisp 1080x1080
     const reader = new FileReader();
     reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setFormData(prev => ({ ...prev, photo: base64 }));
+      const src = event.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 1080;
+        let w = img.width;
+        let h = img.height;
+
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const optimizedBase64 = canvas.toDataURL('image/jpeg', 0.92);
+          setFormData(prev => ({ ...prev, photo: optimizedBase64 }));
+        } else {
+          setFormData(prev => ({ ...prev, photo: src }));
+        }
+      };
+      img.onerror = () => {
+        setFormData(prev => ({ ...prev, photo: src }));
+      };
+      img.src = src;
     };
     reader.readAsDataURL(file);
   };

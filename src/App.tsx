@@ -19,12 +19,21 @@ import { Sparkles, CheckCircle2 } from 'lucide-react';
 export default function App() {
   const [currentView, setCurrentView] = useState<'catalog' | 'details'>('catalog');
   const [selectedTemplate, setSelectedTemplate] = useState<VideoTemplate>(TEMPLATES[0]);
-  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>({
-    isPaid: false,
-    paymentId: '',
-    upiRef: '',
-    amount: 11,
-    paidAt: null
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>(() => {
+    try {
+      const saved = localStorage.getItem('rb_payment_info');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.isPaid) return parsed;
+      }
+    } catch {}
+    return {
+      isPaid: false,
+      paymentId: '',
+      upiRef: '',
+      amount: 11,
+      paidAt: null
+    };
   });
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
@@ -48,6 +57,9 @@ export default function App() {
 
   const handlePaymentSuccess = (info: PaymentInfo) => {
     setPaymentInfo(info);
+    try {
+      localStorage.setItem('rb_payment_info', JSON.stringify(info));
+    } catch {}
     setIsPaymentModalOpen(false);
     setCurrentView('catalog');
     window.scrollTo({ top: 0, behavior: 'smooth' });
