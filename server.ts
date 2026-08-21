@@ -35,24 +35,46 @@ const PORT: number =
     ? parseInt(portVal, 10)
     : (portVal || 3000);
 
-// Resolve binary path for FFmpeg (system ffmpeg or bundled ffmpeg-static)
+// Resolve binary path for FFmpeg (system ffmpeg or bundled ffmpeg-static) with chmod guarantee
 function getFfmpegBinary(): string {
+  // 1. Try system ffmpeg
   try {
     execSync('ffmpeg -version', { stdio: 'ignore' });
     return 'ffmpeg';
   } catch {}
 
+  // 2. Try ffmpeg-static module path
   try {
     const staticPath = (ffmpegStatic as any)?.default || ffmpegStatic;
-
-    if (
-      staticPath &&
-      typeof staticPath === 'string' &&
-      fs.existsSync(staticPath)
-    ) {
+    if (staticPath && typeof staticPath === 'string' && fs.existsSync(staticPath)) {
+      try {
+        fs.chmodSync(staticPath, 0o755);
+      } catch {}
       return staticPath;
     }
   } catch {}
+
+  // 3. Try standard node_modules paths for ffmpeg-static across environments
+  const candidatePaths = [
+    path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg'),
+    path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'bin', 'linux', 'x64', 'ffmpeg'),
+    path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'bin', 'linux', 'arm64', 'ffmpeg'),
+    path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'bin', 'win32', 'x64', 'ffmpeg.exe'),
+    path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'bin', 'darwin', 'x64', 'ffmpeg'),
+    path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'bin', 'darwin', 'arm64', 'ffmpeg'),
+    '/usr/bin/ffmpeg',
+    '/usr/local/bin/ffmpeg'
+  ];
+
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        fs.chmodSync(p, 0o755);
+        execSync(`"${p}" -version`, { stdio: 'ignore' });
+        return p;
+      } catch {}
+    }
+  }
 
   return 'ffmpeg';
 }
@@ -709,8 +731,7 @@ app.post(
         photoBuffer
       );
 
-      // 1. Generate Circular Cropped Photo PNG
-      // (818x818) with alpha transparency via FFmpeg
+      // 1. Generate Circular Cropped Photo PNG (818x818) with alpha transparency
       const photoCirclePath =
         path.join(
           tempDir,
@@ -720,13 +741,38 @@ app.post(
       const ffmpegBin =
         getFfmpegBinary();
 
-      const circlePhotoCmd =
-        `"${ffmpegBin}" -nostdin -y -i "${photoImgPath}" -filter_complex "[0:v]scale=818:818:force_original_aspect_ratio=increase,crop=818:818,format=yuva444p,geq=lum_expr='p(X,Y)':cb_expr='p(X,Y)':cr_expr='p(X,Y)':alpha_expr='if(lte(hypot(X-409,Y-409),409),255,0)'[circle]" -map "[circle]" -vframes 1 "${photoCirclePath}"`;
+      let circleSuccess = false;
 
-      execSync(circlePhotoCmd, { stdio: 'pipe' });
+      // Method 1: Try GEQ circular equation
+      try {
+        const circlePhotoCmd =
+          `"${ffmpegBin}" -nostdin -threads 2 -y -i "${photoImgPath}" -filter_complex "[0:v]scale=818:818:force_original_aspect_ratio=increase,crop=818:818,format=yuva444p,geq=lum_expr='p(X,Y)':cb_expr='p(X,Y)':cr_expr='p(X,Y)':alpha_expr='if(lte(hypot(X-409,Y-409),409),255,0)'[circle]" -map "[circle]" -vframes 1 "${photoCirclePath}"`;
 
-      if (!fs.existsSync(photoCirclePath) || fs.statSync(photoCirclePath).size < 500) {
-        throw new Error('Failed to process and crop user photo into circular frame.');
+        execSync(circlePhotoCmd, { stdio: 'pipe' });
+        if (fs.existsSync(photoCirclePath) && fs.statSync(photoCirclePath).size > 500) {
+          circleSuccess = true;
+        }
+      } catch (geqErr: any) {
+        console.warn('GEQ circular crop fallback triggered:', geqErr?.message);
+      }
+
+      // Method 2: If GEQ fails on certain cloud environments, fallback to direct square crop
+      if (!circleSuccess) {
+        try {
+          const directCropCmd =
+            `"${ffmpegBin}" -nostdin -threads 2 -y -i "${photoImgPath}" -filter_complex "[0:v]scale=818:818:force_original_aspect_ratio=increase,crop=818:818,format=rgba[circle]" -map "[circle]" -vframes 1 "${photoCirclePath}"`;
+
+          execSync(directCropCmd, { stdio: 'pipe' });
+          if (fs.existsSync(photoCirclePath) && fs.statSync(photoCirclePath).size > 500) {
+            circleSuccess = true;
+          }
+        } catch (cropErr: any) {
+          console.warn('Direct crop fallback error:', cropErr?.message);
+        }
+      }
+
+      if (!fs.existsSync(photoCirclePath) || fs.statSync(photoCirclePath).size < 100) {
+        throw new Error('Failed to process and crop user photo.');
       }
 
       // 2. Build ASS Subtitle File
@@ -929,28 +975,40 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\pos(540,1517)}${assSafeNa
       const safeFontDir = fontDir.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
 
       const ffmpegCmdPrimary =
-        `"${ffmpegBin}" -nostdin -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset superfast -crf 23 -pix_fmt yuv420p -c:a copy "${outputMp4Path}"`;
+        `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a copy "${outputMp4Path}"`;
+
+      let renderSuccess = false;
 
       try {
-        execSync(
-          ffmpegCmdPrimary,
-          {
-            stdio: 'pipe',
-          }
-        );
+        execSync(ffmpegCmdPrimary, { stdio: 'pipe' });
+        if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
+          renderSuccess = true;
+        }
       } catch (primaryErr: any) {
         console.warn('Primary ASS subtitle FFmpeg render warning, retrying with direct overlay fallback:', primaryErr?.stderr?.toString() || primaryErr?.message);
-        
-        // Robust fallback overlay if ass filter has any font system issues
-        const ffmpegCmdFallback =
-          `"${ffmpegBin}" -nostdin -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset superfast -crf 23 -pix_fmt yuv420p -c:a copy "${outputMp4Path}"`;
+      }
 
-        execSync(
-          ffmpegCmdFallback,
-          {
-            stdio: 'pipe',
+      // Robust fallback overlay if ass filter has fontconfig issues on cloud hosting
+      if (!renderSuccess) {
+        try {
+          const ffmpegCmdFallback =
+            `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a copy "${outputMp4Path}"`;
+
+          execSync(ffmpegCmdFallback, { stdio: 'pipe' });
+          if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
+            renderSuccess = true;
           }
-        );
+        } catch (fallbackErr: any) {
+          console.warn('Fallback render warning, retrying with safe ultrafast transcode:', fallbackErr?.message);
+        }
+      }
+
+      // Last-resort transcode
+      if (!renderSuccess) {
+        const ffmpegCmdSafe =
+          `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -pix_fmt yuv420p "${outputMp4Path}"`;
+
+        execSync(ffmpegCmdSafe, { stdio: 'pipe' });
       }
 
       if (!fs.existsSync(outputMp4Path) || fs.statSync(outputMp4Path).size < 1000) {
