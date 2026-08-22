@@ -9,6 +9,10 @@ export function getApiBaseUrl(): string {
 }
 
 export function apiUrl(path: string): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:')) {
+    return path;
+  }
   const base = getApiBaseUrl();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return base ? `${base}${normalizedPath}` : normalizedPath;

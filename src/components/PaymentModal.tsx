@@ -187,8 +187,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               localStorage.setItem('rb_payment_token', verifyData.paymentToken);
             } catch {}
 
+            // Update app payment state immediately with verified token
+            onPaymentSuccess(verifiedPayment);
+
             setTimeout(() => {
-              onPaymentSuccess(verifiedPayment);
               onClose();
             }, 1200);
 

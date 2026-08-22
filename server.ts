@@ -84,7 +84,7 @@ function getFfmpegBinary(): string {
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Payment-Token, x-payment-token');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -643,27 +643,25 @@ app.post(
         photoBase64,
       } = req.body || {};
 
-      // Extract payment token from body, headers, or query
-      const rawToken =
-        req.body?.paymentToken ||
-        req.body?.token ||
-        req.body?.paymentId ||
-        req.body?.razorpay_payment_id ||
-        (req.headers['x-payment-token'] as string) ||
-        (req.headers['authorization']
-          ? (req.headers['authorization'] as string).replace(/^Bearer\s+/i, '')
-          : '') ||
-        (req.query?.paymentToken as string) ||
-        '';
+      // Extract payment token candidates from body, headers, or query
+      const candidateTokens = [
+        req.body?.paymentToken,
+        req.body?.token,
+        req.body?.paymentId,
+        req.body?.razorpay_payment_id,
+        req.headers['x-payment-token'],
+        req.headers['authorization'] ? (req.headers['authorization'] as string).replace(/^Bearer\s+/i, '') : '',
+        req.query?.paymentToken,
+        req.query?.token
+      ]
+        .map(t => (typeof t === 'string' ? t.trim() : ''))
+        .filter(t => t && t !== 'undefined' && t !== 'null');
 
-      const paymentToken = typeof rawToken === 'string' ? rawToken.trim() : '';
+      const isPaymentVerified = candidateTokens.some(token => validatePaymentSessionToken(token));
 
       // 1. Validate payment token server-side
-      if (
-        !paymentToken ||
-        !validatePaymentSessionToken(paymentToken)
-      ) {
-        console.warn('Payment verification required for token:', paymentToken ? `${paymentToken.substring(0, 16)}...` : 'NONE');
+      if (!isPaymentVerified) {
+        console.warn('Payment verification required. Candidates checked:', candidateTokens.length ? candidateTokens.map(c => `${c.substring(0, 16)}...`) : 'NONE');
         return res.status(403).json({
           error:
             'Payment verification required. Please complete ₹11 payment first.',
