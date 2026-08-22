@@ -47,51 +47,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle direct UPI / QR payment confirmation
-  const handleDirectUpiConfirmation = async () => {
-    setErrorMessage(null);
-    setIsVerifying(true);
-
-    try {
-      const res = await fetch(apiUrl('/api/confirm-upi-payment'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateId,
-          upiApp: selectedApp,
-          upiRef: `UPI_${Date.now()}`
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success || !data.paymentToken) {
-        throw new Error(data.error || 'Could not verify UPI payment.');
-      }
-
-      setIsVerifying(false);
-      setPaymentSuccess(true);
-      confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
-
-      const verifiedPayment: PaymentInfo = {
-        isPaid: true,
-        paymentId: data.paymentId,
-        orderId: `order_upi_${Date.now()}`,
-        upiRef: data.paymentId,
-        amount: 11,
-        paidAt: new Date().toLocaleTimeString(),
-        paymentToken: data.paymentToken
-      };
-
-      setTimeout(() => {
-        onPaymentSuccess(verifiedPayment);
-        onClose();
-      }, 1000);
-    } catch (err: any) {
-      setIsVerifying(false);
-      setErrorMessage(err.message || 'Payment confirmation failed. Please try again.');
-    }
-  };
-
   const handleInitiatePayment = async () => {
     setErrorMessage(null);
     setIsProcessing(true);

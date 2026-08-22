@@ -335,34 +335,6 @@ app.post('/api/verify-payment', (req, res) => {
   }
 });
 
-// Endpoint: Confirm direct UPI or QR Payment & generate authenticated session token
-app.post('/api/confirm-upi-payment', (req, res) => {
-  try {
-    const { templateId, upiApp, upiRef } = req.body;
-    const paymentId = upiRef && String(upiRef).trim() 
-      ? String(upiRef).trim() 
-      : `pay_upi_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    
-    const token = createPaymentSessionToken(paymentId);
-    console.log(`UPI payment session confirmed for template: ${templateId}, App: ${upiApp || 'UPI'}, ID: ${paymentId}`);
-
-    return res.json({
-      success: true,
-      paymentToken: token,
-      paymentId,
-      amount: 11,
-      paidAt: new Date().toISOString()
-    });
-  } catch (err: any) {
-    console.error('UPI Payment Confirmation Exception:', err);
-    return res.status(500).json({
-      success: false,
-      error: 'Could not confirm UPI payment.',
-      details: err.message
-    });
-  }
-});
-
 // Helper for automatic font sizing based on name length
 function calculateAssFontSize(name: string): number {
   const len = name.length;
