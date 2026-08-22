@@ -1198,8 +1198,50 @@ function cleanupDirectory(
   }
 }
 
+// Initialize and warm up font cache for FFmpeg libass and Canvas rendering
+function initializeSystemFonts(): void {
+  try {
+    const fontDir = getFontDir();
+    const sysFontDirs = [
+      path.join(process.env.HOME || '/root', '.local', 'share', 'fonts'),
+      path.join(process.env.HOME || '/root', '.fonts'),
+      '/tmp/fonts'
+    ];
+
+    for (const sDir of sysFontDirs) {
+      try {
+        if (!fs.existsSync(sDir)) {
+          fs.mkdirSync(sDir, { recursive: true });
+        }
+        if (fs.existsSync(fontDir)) {
+          const files = fs.readdirSync(fontDir);
+          for (const f of files) {
+            if (f.endsWith('.ttf') || f.endsWith('.otf')) {
+              const src = path.join(fontDir, f);
+              const dest = path.join(sDir, f);
+              if (!fs.existsSync(dest) || fs.statSync(dest).size !== fs.statSync(src).size) {
+                fs.copyFileSync(src, dest);
+              }
+            }
+          }
+        }
+      } catch (copyErr) {
+        console.warn('Font copy warning for dir:', sDir, copyErr);
+      }
+    }
+
+    try {
+      execSync('fc-cache -f', { stdio: 'ignore' });
+      console.log('System font cache (fc-cache) updated successfully.');
+    } catch {}
+  } catch (err) {
+    console.warn('Font initialization warning:', err);
+  }
+}
+
 // Vite Dev Middleware vs Production Static File Server
 async function start() {
+  initializeSystemFonts();
   if (
     process.env.NODE_ENV !==
     'production'

@@ -27,9 +27,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <span>Special Festival Offer • Instant Delivery</span>
           </div>
 
-          {/* Heading 1: RAKSHA BANDHAN DIGITAL GIFT ₹11/- */}
+          {/* Heading 1: RAKSHA BANDHAN DIGITAL GIFT ₹ 11/- */}
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black font-laila tracking-tight text-[#8A1538] uppercase leading-tight drop-shadow-sm">
-            RAKSHA BANDHAN DIGITAL GIFT <span className="text-[#8A1538] underline decoration-[#C5A059] decoration-wavy decoration-2">₹11/-</span>
+            RAKSHA BANDHAN DIGITAL GIFT <span className="text-[#8A1538] underline decoration-[#C5A059] decoration-wavy decoration-2">₹ 11/-</span>
           </h1>
 
           {/* Subheading 2: 🎁 Unlock Your Digital Gift */}
@@ -55,7 +55,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               >
                 <Film className="w-7 h-7 text-amber-200 group-hover:rotate-12 transition-transform" />
                 <span>
-                  OPEN VIDEO GENERATOR 🚀
+                  Download now
                 </span>
               </button>
             ) : (
@@ -70,28 +70,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </span>
               </button>
             )}
-
-            <p className="text-sm text-[#78716C] mt-3 font-semibold">
-              {isPaid
-                ? '✅ Studio Access Unlocked • Click to open Video Generator'
-                : '🔒 Instant access to all HD video greeting templates via UPI'}
-            </p>
           </div>
 
         </div>
       </div>
 
       {/* Feature Highlights Minimal Pills */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 w-full max-w-lg text-sm sm:text-base font-bold text-[#57534E] pt-2">
-        <div className="p-3.5 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
-          <span>📹</span>
-          <span>1080×1920 Full HD</span>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-2 gap-3.5 w-full max-w-md text-sm sm:text-base font-bold text-[#57534E] pt-2">
         <div className="p-3.5 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
           <span>⚡</span>
           <span>Instant Download</span>
         </div>
-        <div className="col-span-2 sm:col-span-1 p-3.5 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
+        <div className="p-3.5 bg-white rounded-2xl border border-[#E8DFC8] shadow-sm flex items-center justify-center gap-2">
           <ShieldCheck className="w-5 h-5 text-emerald-600" />
           <span>100% Safe & Secure</span>
         </div>
