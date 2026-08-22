@@ -100,8 +100,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       // 1. Ensure Razorpay Checkout SDK is ready
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded || !(window as any).Razorpay) {
-        // Gracefully fallback to direct UPI confirmation if Razorpay SDK fails to load
-        return handleDirectUpiConfirmation();
+        throw new Error('Razorpay Checkout SDK is loading or unavailable. Please check your internet connection and try again.');
       }
 
       // 2. Call backend to create real Razorpay Order
@@ -117,15 +116,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       const orderData = await createOrderRes.json().catch(() => ({}));
 
       if (!createOrderRes.ok || !orderData.success || !orderData.order) {
-        // If Razorpay is not configured on server, fallback to UPI confirmation
-        return handleDirectUpiConfirmation();
+        throw new Error(orderData.error || 'Failed to create payment order. Please ensure Razorpay keys are configured.');
       }
 
       const { order, keyId } = orderData;
       const effectiveKeyId = keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
 
       if (!effectiveKeyId) {
-        return handleDirectUpiConfirmation();
+        throw new Error('Razorpay Key ID not available on server.');
       }
 
       // 3. Configure Razorpay Standard Checkout Options
@@ -208,7 +206,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         modal: {
           ondismiss: () => {
             setIsProcessing(false);
-          }
+          },
+          escape: true,
+          backdropclose: false
+        },
+        retry: {
+          enabled: true
         }
       };
 
@@ -322,7 +325,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </p>
                 
                 <button
-                  onClick={() => setSelectedApp('gpay')}
+                  onClick={() => {
+                    setSelectedApp('gpay');
+                    handleInitiatePayment();
+                  }}
+                  disabled={isProcessing || isVerifying}
                   className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'gpay'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
@@ -336,7 +343,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </button>
 
                 <button
-                  onClick={() => setSelectedApp('phonepe')}
+                  onClick={() => {
+                    setSelectedApp('phonepe');
+                    handleInitiatePayment();
+                  }}
+                  disabled={isProcessing || isVerifying}
                   className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'phonepe'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
@@ -350,7 +361,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </button>
 
                 <button
-                  onClick={() => setSelectedApp('paytm')}
+                  onClick={() => {
+                    setSelectedApp('paytm');
+                    handleInitiatePayment();
+                  }}
+                  disabled={isProcessing || isVerifying}
                   className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'paytm'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
