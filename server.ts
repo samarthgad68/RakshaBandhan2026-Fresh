@@ -313,18 +313,14 @@ app.post('/api/verify-payment', (req, res) => {
       });
     }
 
-    if (!keySecret) {
-      console.warn('RAZORPAY_KEY_SECRET is not configured on server; generating secure verified session token.');
-      const token = createPaymentSessionToken(razorpay_payment_id || `pay_${Date.now()}`);
-      return res.json({
-        success: true,
-        paymentToken: token,
-        paymentId: razorpay_payment_id || `pay_${Date.now()}`,
-        orderId: razorpay_order_id || `order_${Date.now()}`,
-        amount: amount || 11,
-        paidAt: new Date().toISOString()
-      });
-    }
+if (!keySecret) {
+  console.error('RAZORPAY_KEY_SECRET is not configured on server.');
+
+  return res.status(500).json({
+    success: false,
+    error: 'Razorpay payment verification is not configured on server.'
+  });
+}
 
     // Verify HMAC-SHA256 signature using RAZORPAY_KEY_SECRET
     const hmac = crypto.createHmac('sha256', keySecret);
@@ -370,7 +366,6 @@ app.post('/api/verify-payment', (req, res) => {
 });
 
 // Endpoint: Confirm direct UPI or QR Payment & generate authenticated session token
-app.post('/api/confirm-upi-payment', (req, res) => {
   try {
     const { templateId, upiApp, upiRef } = req.body;
     const paymentId = upiRef && String(upiRef).trim() 
