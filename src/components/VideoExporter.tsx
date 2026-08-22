@@ -102,33 +102,61 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
     }, 350);
 
     try {
-      // Auto-heal payment token if user has verified payment state
+      // Retrieve verified payment token from props or localStorage
       let token = paymentInfo?.paymentToken || '';
-      if (!token && paymentInfo?.isPaid) {
+
+      if (!token) {
+        try {
+          const directToken = localStorage.getItem('rb_payment_token');
+          if (directToken) token = directToken.trim();
+        } catch {}
+      }
+
+      if (!token) {
+        try {
+          const savedInfo = localStorage.getItem('rb_payment_info');
+          if (savedInfo) {
+            const parsed = JSON.parse(savedInfo);
+            if (parsed?.paymentToken) token = String(parsed.paymentToken).trim();
+            else if (parsed?.paymentId) token = String(parsed.paymentId).trim();
+          }
+        } catch {}
+      }
+
+      // Auto-heal payment token if user has verified payment state
+      if (!token && (paymentInfo?.isPaid || localStorage.getItem('rb_payment_info'))) {
         try {
           const authRes = await fetch(apiUrl('/api/confirm-upi-payment'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               templateId: template.id,
-              upiRef: paymentInfo.paymentId || paymentInfo.upiRef || 'pay_session'
+              upiRef: paymentInfo?.paymentId || paymentInfo?.upiRef || 'pay_session'
             })
           });
           const authData = await authRes.json().catch(() => ({}));
-          if (authData.paymentToken) {
+          if (authData?.paymentToken) {
             token = authData.paymentToken;
+            try {
+              localStorage.setItem('rb_payment_token', token);
+            } catch {}
           }
         } catch {}
       }
 
       const res = await fetch(apiUrl('/api/generate-video'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Payment-Token': token,
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           templateId: template.id,
           name: formData.name,
           photoBase64: formData.photo,
-          paymentToken: token
+          paymentToken: token,
+          paymentId: paymentInfo?.paymentId || ''
         })
       });
 

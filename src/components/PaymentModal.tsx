@@ -182,6 +182,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               paymentToken: verifyData.paymentToken
             };
 
+            try {
+              localStorage.setItem('rb_payment_info', JSON.stringify(verifiedPayment));
+              localStorage.setItem('rb_payment_token', verifyData.paymentToken);
+            } catch {}
+
             setTimeout(() => {
               onPaymentSuccess(verifiedPayment);
               onClose();

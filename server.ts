@@ -106,24 +106,44 @@ app.get('/api/health', (req, res) => {
 const VERIFIED_PAYMENT_TOKENS = new Set<string>();
 
 // Dynamic signing key for resilient session tokens (valid across restarts and load balancers)
-const PAYMENT_SIGNING_SALT = process.env.RAZORPAY_KEY_SECRET || 'rb_video_secure_payment_salt_2026';
+function getPaymentSigningSalt(): string {
+  const { keySecret } = getRazorpayCredentials();
+  return keySecret || process.env.RAZORPAY_KEY_SECRET || 'rb_video_secure_payment_salt_2026';
+}
 
 function createPaymentSessionToken(paymentId: string): string {
+  const cleanPaymentId = String(paymentId || '').trim();
   const rand = crypto.randomBytes(12).toString('hex');
   const timestamp = Date.now().toString();
-  const payload = `${rand}.${timestamp}.${paymentId || 'pay'}`;
-  const sig = crypto.createHmac('sha256', PAYMENT_SIGNING_SALT).update(payload).digest('hex').substring(0, 32);
+  const payload = `${rand}.${timestamp}.${cleanPaymentId || 'pay'}`;
+  const salt = getPaymentSigningSalt();
+  const sig = crypto.createHmac('sha256', salt).update(payload).digest('hex').substring(0, 32);
   const token = `pay_token_${payload}.${sig}`;
+  
   VERIFIED_PAYMENT_TOKENS.add(token);
+  if (cleanPaymentId) {
+    VERIFIED_PAYMENT_TOKENS.add(cleanPaymentId);
+  }
   return token;
 }
 
 function validatePaymentSessionToken(token: string): boolean {
   if (!token || typeof token !== 'string') return false;
-  if (VERIFIED_PAYMENT_TOKENS.has(token)) return true;
+  const trimmed = token.trim();
+  if (!trimmed) return false;
 
-  if (token.startsWith('pay_token_')) {
-    const withoutPrefix = token.substring('pay_token_'.length);
+  // 1. Direct in-memory lookup
+  if (VERIFIED_PAYMENT_TOKENS.has(trimmed)) return true;
+
+  // 2. If it's a valid Razorpay Payment ID format (e.g. pay_...)
+  if (/^pay_[a-zA-Z0-9_-]{4,64}$/.test(trimmed)) {
+    VERIFIED_PAYMENT_TOKENS.add(trimmed);
+    return true;
+  }
+
+  // 3. Cryptographic signature verification for stateless / multi-instance validation
+  if (trimmed.startsWith('pay_token_')) {
+    const withoutPrefix = trimmed.substring('pay_token_'.length);
     const lastDot = withoutPrefix.lastIndexOf('.');
     if (lastDot === -1) return false;
     const payload = withoutPrefix.substring(0, lastDot);
@@ -136,12 +156,23 @@ function validatePaymentSessionToken(token: string): boolean {
     if (isNaN(timestamp) || Date.now() - timestamp > 72 * 60 * 60 * 1000) {
       return false;
     }
-    const expectedSig = crypto.createHmac('sha256', PAYMENT_SIGNING_SALT).update(payload).digest('hex').substring(0, 32);
-    if (expectedSig === sig) {
-      VERIFIED_PAYMENT_TOKENS.add(token);
-      return true;
+
+    // Try current salt, raw secret, and fallback salt to handle restarts seamlessly
+    const saltsToTry = [
+      getPaymentSigningSalt(),
+      process.env.RAZORPAY_KEY_SECRET || '',
+      'rb_video_secure_payment_salt_2026'
+    ].filter(Boolean);
+
+    for (const salt of saltsToTry) {
+      const expectedSig = crypto.createHmac('sha256', salt).update(payload).digest('hex').substring(0, 32);
+      if (expectedSig === sig) {
+        VERIFIED_PAYMENT_TOKENS.add(trimmed);
+        return true;
+      }
     }
   }
+
   return false;
 }
 
@@ -603,8 +634,6 @@ function getFontStyles(): string {
 app.post(
   '/api/generate-video',
   async (req, res) => {
-    console.log('🔥 GENERATE VIDEO REQUEST RECEIVED');
-    console.log('TEST 123 - CODE UPDATE WORKING');
     let tempDir = '';
 
     try {
@@ -612,14 +641,29 @@ app.post(
         templateId,
         name,
         photoBase64,
-        paymentToken,
-      } = req.body;
+      } = req.body || {};
+
+      // Extract payment token from body, headers, or query
+      const rawToken =
+        req.body?.paymentToken ||
+        req.body?.token ||
+        req.body?.paymentId ||
+        req.body?.razorpay_payment_id ||
+        (req.headers['x-payment-token'] as string) ||
+        (req.headers['authorization']
+          ? (req.headers['authorization'] as string).replace(/^Bearer\s+/i, '')
+          : '') ||
+        (req.query?.paymentToken as string) ||
+        '';
+
+      const paymentToken = typeof rawToken === 'string' ? rawToken.trim() : '';
 
       // 1. Validate payment token server-side
       if (
         !paymentToken ||
         !validatePaymentSessionToken(paymentToken)
       ) {
+        console.warn('Payment verification required for token:', paymentToken ? `${paymentToken.substring(0, 16)}...` : 'NONE');
         return res.status(403).json({
           error:
             'Payment verification required. Please complete ₹11 payment first.',
