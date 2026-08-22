@@ -55,7 +55,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               >
                 <Film className="w-7 h-7 text-amber-200 group-hover:rotate-12 transition-transform" />
                 <span>
-                  Download now
+                  Create & Download Video
                 </span>
               </button>
             ) : (
@@ -66,7 +66,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               >
                 <Gift className="w-7 h-7 text-amber-200 group-hover:rotate-12 transition-transform" />
                 <span>
-                  UNLOCK GIFT – <span className="text-amber-300 font-extrabold tracking-wide">₹11/-</span>
+                  DOWNLOAD / UNLOCK – <span className="text-amber-300 font-extrabold tracking-wide">₹11/-</span>
                 </span>
               </button>
             )}

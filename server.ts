@@ -27,13 +27,7 @@ const __dirname = __filename
 const app = express();
 app.set('trust proxy', true);
 
-// Safe Port configuration for cloud hosting
-const portVal = process.env.PORT;
-
-const PORT: number =
-  typeof portVal === 'string'
-    ? parseInt(portVal, 10)
-    : (portVal || 3000);
+const PORT = 3000;
 
 // Resolve binary path for FFmpeg (system ffmpeg or bundled ffmpeg-static) with chmod guarantee
 function getFfmpegBinary(): string {
@@ -643,28 +637,32 @@ app.post(
         photoBase64.startsWith('http://') ||
         photoBase64.startsWith('https://')
       ) {
-        const resp =
-          await fetch(photoBase64);
+        try {
+          const resp = await fetch(photoBase64, { signal: AbortSignal.timeout(6000) });
+          if (!resp.ok) {
+            throw new Error(
+              `Failed to fetch photo from URL: ${resp.statusText}`
+            );
+          }
 
-        if (!resp.ok) {
-          throw new Error(
-            `Failed to fetch photo from URL: ${resp.statusText}`
-          );
-        }
+          const arrayBuffer =
+            await resp.arrayBuffer();
 
-        const arrayBuffer =
-          await resp.arrayBuffer();
+          photoBuffer =
+            Buffer.from(arrayBuffer);
 
-        photoBuffer =
-          Buffer.from(arrayBuffer);
+          const contentType =
+            resp.headers.get(
+              'content-type'
+            );
 
-        const contentType =
-          resp.headers.get(
-            'content-type'
-          );
-
-        if (contentType) {
-          mimeType = contentType;
+          if (contentType) {
+            mimeType = contentType;
+          }
+        } catch (fetchErr: any) {
+          console.warn('Could not fetch photo from remote URL, using fallback avatar:', fetchErr?.message);
+          photoBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+          mimeType = 'image/png';
         }
       } else if (
         photoBase64.includes('base64,')
@@ -1186,9 +1184,9 @@ function initializeSystemFonts(): void {
   try {
     const fontDir = getFontDir();
     const sysFontDirs = [
+      '/tmp/fonts',
       path.join(process.env.HOME || '/root', '.local', 'share', 'fonts'),
-      path.join(process.env.HOME || '/root', '.fonts'),
-      '/tmp/fonts'
+      path.join(process.env.HOME || '/root', '.fonts')
     ];
 
     for (const sDir of sysFontDirs) {
@@ -1214,7 +1212,7 @@ function initializeSystemFonts(): void {
     }
 
     try {
-      execSync('fc-cache -f', { stdio: 'ignore' });
+      execSync('fc-cache -f "/tmp/fonts"', { stdio: 'ignore' });
       console.log('System font cache (fc-cache) updated successfully.');
     } catch {}
   } catch (err) {
