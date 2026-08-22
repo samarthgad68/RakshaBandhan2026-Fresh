@@ -366,7 +366,8 @@ if (!keySecret) {
 });
 
 // Endpoint: Confirm direct UPI or QR Payment & generate authenticated session token
-  try {
+  app.post('/api/confirm-upi-payment', (req, res) => {
+    try {
     const { templateId, upiApp, upiRef } = req.body;
     const paymentId = upiRef && String(upiRef).trim() 
       ? String(upiRef).trim() 
