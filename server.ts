@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -146,8 +147,10 @@ function validatePaymentSessionToken(token: string): boolean {
 
 // Helper to retrieve Razorpay credentials securely from environment
 function getRazorpayCredentials() {
-  const keyId = (process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '').trim();
-  const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').trim();
+  const rawKeyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '';
+  const rawKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
+  const keyId = rawKeyId.trim().replace(/^["']|["']$/g, '');
+  const keySecret = rawKeySecret.trim().replace(/^["']|["']$/g, '');
   return { keyId, keySecret };
 }
 

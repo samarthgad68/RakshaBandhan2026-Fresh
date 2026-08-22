@@ -322,8 +322,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </p>
                 
                 <button
-                  onClick={() => setSelectedApp('gpay')}
-                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
+                  onClick={() => {
+                    setSelectedApp('gpay');
+                    handleInitiatePayment();
+                  }}
+                  disabled={isProcessing || isVerifying}
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold disabled:opacity-50 ${
                     selectedApp === 'gpay'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'
@@ -336,8 +340,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </button>
 
                 <button
-                  onClick={() => setSelectedApp('phonepe')}
-                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
+                  onClick={() => {
+                    setSelectedApp('phonepe');
+                    handleInitiatePayment();
+                  }}
+                  disabled={isProcessing || isVerifying}
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold disabled:opacity-50 ${
                     selectedApp === 'phonepe'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'
@@ -350,8 +358,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </button>
 
                 <button
-                  onClick={() => setSelectedApp('paytm')}
-                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
+                  onClick={() => {
+                    setSelectedApp('paytm');
+                    handleInitiatePayment();
+                  }}
+                  disabled={isProcessing || isVerifying}
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold disabled:opacity-50 ${
                     selectedApp === 'paytm'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'
