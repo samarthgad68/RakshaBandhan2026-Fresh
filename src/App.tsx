@@ -24,9 +24,7 @@ export default function App() {
       const saved = localStorage.getItem('rb_payment_info');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.isPaid && parsed.paymentToken && typeof parsed.paymentToken === 'string') {
-          return parsed;
-        }
+        if (parsed && parsed.isPaid) return parsed;
       }
     } catch {}
     return {

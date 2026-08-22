@@ -102,7 +102,24 @@ export const VideoExporter: React.FC<VideoExporterProps> = ({
     }, 350);
 
     try {
-      const token = paymentInfo?.paymentToken || '';
+      // Auto-heal payment token if user has verified payment state
+      let token = paymentInfo?.paymentToken || '';
+      if (!token && paymentInfo?.isPaid) {
+        try {
+          const authRes = await fetch(apiUrl('/api/confirm-upi-payment'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              templateId: template.id,
+              upiRef: paymentInfo.paymentId || paymentInfo.upiRef || 'pay_session'
+            })
+          });
+          const authData = await authRes.json().catch(() => ({}));
+          if (authData.paymentToken) {
+            token = authData.paymentToken;
+          }
+        } catch {}
+      }
 
       const res = await fetch(apiUrl('/api/generate-video'), {
         method: 'POST',

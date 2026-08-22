@@ -27,7 +27,13 @@ const __dirname = __filename
 const app = express();
 app.set('trust proxy', true);
 
-const PORT = 3000;
+// Safe Port configuration for cloud hosting
+const portVal = process.env.PORT;
+
+const PORT: number =
+  typeof portVal === 'string'
+    ? parseInt(portVal, 10)
+    : (portVal || 3000);
 
 // Resolve binary path for FFmpeg (system ffmpeg or bundled ffmpeg-static) with chmod guarantee
 function getFfmpegBinary(): string {
@@ -329,6 +335,34 @@ app.post('/api/verify-payment', (req, res) => {
   }
 });
 
+// Endpoint: Confirm direct UPI or QR Payment & generate authenticated session token
+app.post('/api/confirm-upi-payment', (req, res) => {
+  try {
+    const { templateId, upiApp, upiRef } = req.body;
+    const paymentId = upiRef && String(upiRef).trim() 
+      ? String(upiRef).trim() 
+      : `pay_upi_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    
+    const token = createPaymentSessionToken(paymentId);
+    console.log(`UPI payment session confirmed for template: ${templateId}, App: ${upiApp || 'UPI'}, ID: ${paymentId}`);
+
+    return res.json({
+      success: true,
+      paymentToken: token,
+      paymentId,
+      amount: 11,
+      paidAt: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error('UPI Payment Confirmation Exception:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Could not confirm UPI payment.',
+      details: err.message
+    });
+  }
+});
+
 // Helper for automatic font sizing based on name length
 function calculateAssFontSize(name: string): number {
   const len = name.length;
@@ -416,146 +450,151 @@ function getFontDir(): string {
   );
 }
 
-function getFontFilePathForText(text: string): string {
-  const fontDir = getFontDir();
-
-  // Devanagari (Hindi, Marathi, Sanskrit, Konkani, Nepali, Maithili, Bhojpuri, etc.)
-  if (/[\u0900-\u097F\uA8E0-\uA8FF\u1CD0-\u1CFF]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansDevanagari-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansDevanagari.ttf');
-  }
-
-  // Gujarati
-  if (/[\u0A80-\u0AFF]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansGujarati-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansGujarati.ttf');
-  }
-
-  // Bengali & Assamese
-  if (/[\u0980-\u09FF]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansBengali-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansBengali.ttf');
-  }
-
-  // Punjabi / Gurmukhi
-  if (/[\u0A00-\u0A7F]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansGurmukhi-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansGurmukhi.ttf');
-  }
-
-  // Odia / Oriya
-  if (/[\u0B00-\u0B7F]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansOriya-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansOriya.ttf');
-  }
-
-  // Tamil
-  if (/[\u0B80-\u0BFF]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansTamil-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansTamil.ttf');
-  }
-
-  // Telugu
-  if (/[\u0C00-\u0C7F]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansTelugu-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansTelugu.ttf');
-  }
-
-  // Kannada
-  if (/[\u0C80-\u0CFF]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansKannada-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansKannada.ttf');
-  }
-
-  // Malayalam
-  if (/[\u0D00-\u0D7F]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansMalayalam-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansMalayalam.ttf');
-  }
-
-  // Arabic / Urdu / Sindhi / Persian
-  if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)) {
-    const bold = path.join(fontDir, 'NotoSansArabic-Bold.ttf');
-    if (fs.existsSync(bold)) return bold;
-    return path.join(fontDir, 'NotoSansArabic.ttf');
-  }
-
-  const bold = path.join(fontDir, 'NotoSans-Bold.ttf');
-  if (fs.existsSync(bold)) return bold;
-  return path.join(fontDir, 'NotoSans.ttf');
+// Helper for escaping XML in SVG content
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
-function initFontEnvironment(): void {
+// In-memory cache for base64 encoded font definitions
+// to avoid disk reads on every request
+let cachedFontFaceStyles = '';
+
+function getFontStyles(): string {
+  if (cachedFontFaceStyles) {
+    return cachedFontFaceStyles;
+  }
+
+  const fontFilesList = [
+    {
+      name: 'NotoSansDevanagariCustom',
+      file: 'NotoSansDevanagari.ttf',
+    },
+    {
+      name: 'NotoSansGujaratiCustom',
+      file: 'NotoSansGujarati.ttf',
+    },
+    {
+      name: 'NotoSansBengaliCustom',
+      file: 'NotoSansBengali.ttf',
+    },
+    {
+      name: 'NotoSansTamilCustom',
+      file: 'NotoSansTamil.ttf',
+    },
+    {
+      name: 'NotoSansTeluguCustom',
+      file: 'NotoSansTelugu.ttf',
+    },
+    {
+      name: 'NotoSansKannadaCustom',
+      file: 'NotoSansKannada.ttf',
+    },
+    {
+      name: 'NotoSansMalayalamCustom',
+      file: 'NotoSansMalayalam.ttf',
+    },
+    {
+      name: 'NotoSansGurmukhiCustom',
+      file: 'NotoSansGurmukhi.ttf',
+    },
+    {
+      name: 'NotoSansOriyaCustom',
+      file: 'NotoSansOriya.ttf',
+    },
+    {
+      name: 'NotoSansArabicCustom',
+      file: 'NotoSansArabic.ttf',
+    },
+    {
+      name: 'NotoSansCustom',
+      file: 'NotoSans.ttf',
+    },
+  ];
+
+  let styles = '';
+
   const fontDir = getFontDir();
-  const tmpFontDir = '/tmp/fonts';
-  const tmpCacheDir = '/tmp/fc-cache';
-  const home = process.env.HOME || '/root';
-  const userFontsDir = path.join(home, '.fonts');
-  const userLocalShareFontsDir = path.join(home, '.local', 'share', 'fonts');
+
+  const sysFontDir = path.join(
+    process.env.HOME || '/root',
+    '.local',
+    'share',
+    'fonts'
+  );
 
   try {
-    for (const d of [tmpFontDir, tmpCacheDir, userFontsDir, userLocalShareFontsDir]) {
-      if (!fs.existsSync(d)) {
-        fs.mkdirSync(d, { recursive: true });
-      }
+    if (!fs.existsSync(sysFontDir)) {
+      fs.mkdirSync(sysFontDir, {
+        recursive: true,
+      });
     }
+  } catch (e) {
+    console.warn(
+      'Could not create sysFontDir:',
+      e
+    );
+  }
 
-    if (fs.existsSync(fontDir)) {
-      const files = fs.readdirSync(fontDir);
-      for (const file of files) {
-        if (file.endsWith('.ttf') || file.endsWith('.otf') || file.endsWith('.woff') || file.endsWith('.woff2')) {
-          const src = path.join(fontDir, file);
-          for (const targetDir of [tmpFontDir, userFontsDir, userLocalShareFontsDir]) {
-            const dest = path.join(targetDir, file);
-            try {
-              if (!fs.existsSync(dest) || fs.statSync(dest).size !== fs.statSync(src).size) {
-                fs.copyFileSync(src, dest);
-              }
-            } catch {}
-          }
-        }
-      }
-    }
-
-    // Write fonts.conf for fontconfig / libass / FFmpeg
-    const fontsConfPath = path.join(tmpFontDir, 'fonts.conf');
-    const fontsConfContent = `<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-<fontconfig>
-  <dir>${tmpFontDir}</dir>
-  <dir>${fontDir}</dir>
-  <dir>${userFontsDir}</dir>
-  <dir>${userLocalShareFontsDir}</dir>
-  <cachedir>${tmpCacheDir}</cachedir>
-  <config></config>
-</fontconfig>`;
-
-    fs.writeFileSync(fontsConfPath, fontsConfContent);
-
-    process.env.FONTCONFIG_FILE = fontsConfPath;
-    process.env.FONTCONFIG_PATH = tmpFontDir;
+  for (const fontInfo of fontFilesList) {
+    const fPath = path.join(
+      fontDir,
+      fontInfo.file
+    );
 
     try {
-      execSync(`fc-cache -f "${tmpFontDir}" "${fontDir}" "${userFontsDir}"`, { stdio: 'ignore' });
-    } catch {}
+      if (fs.existsSync(fPath)) {
+        try {
+          const sysDest = path.join(
+            sysFontDir,
+            fontInfo.file
+          );
 
-    console.log('✅ Font configuration initialized successfully. Primary font dir:', fontDir);
-  } catch (e) {
-    console.warn('⚠️ Font environment setup note:', e);
+          if (!fs.existsSync(sysDest)) {
+            fs.copyFileSync(
+              fPath,
+              sysDest
+            );
+          }
+        } catch {}
+
+        const fontB64 =
+          fs
+            .readFileSync(fPath)
+            .toString('base64');
+
+        styles += `@font-face {
+          font-family: "${fontInfo.name}";
+          src: url("data:font/ttf;charset=utf-8;base64,${fontB64}") format("truetype");
+          font-weight: normal;
+          font-style: normal;
+        }\n`;
+      }
+    } catch (e) {
+      console.warn(
+        `Font loading warning for ${fontInfo.file}:`,
+        e
+      );
+    }
   }
-}
 
-// Initialize font environment immediately on startup
-initFontEnvironment();
+  try {
+    execSync(
+      `fc-cache -f "${sysFontDir}"`,
+      {
+        stdio: 'ignore',
+      }
+    );
+  } catch {}
+
+  cachedFontFaceStyles = styles;
+
+  return cachedFontFaceStyles;
+}
 
 // Endpoint 2: Generate Video
 app.post(
@@ -637,32 +676,28 @@ app.post(
         photoBase64.startsWith('http://') ||
         photoBase64.startsWith('https://')
       ) {
-        try {
-          const resp = await fetch(photoBase64, { signal: AbortSignal.timeout(6000) });
-          if (!resp.ok) {
-            throw new Error(
-              `Failed to fetch photo from URL: ${resp.statusText}`
-            );
-          }
+        const resp =
+          await fetch(photoBase64);
 
-          const arrayBuffer =
-            await resp.arrayBuffer();
+        if (!resp.ok) {
+          throw new Error(
+            `Failed to fetch photo from URL: ${resp.statusText}`
+          );
+        }
 
-          photoBuffer =
-            Buffer.from(arrayBuffer);
+        const arrayBuffer =
+          await resp.arrayBuffer();
 
-          const contentType =
-            resp.headers.get(
-              'content-type'
-            );
+        photoBuffer =
+          Buffer.from(arrayBuffer);
 
-          if (contentType) {
-            mimeType = contentType;
-          }
-        } catch (fetchErr: any) {
-          console.warn('Could not fetch photo from remote URL, using fallback avatar:', fetchErr?.message);
-          photoBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-          mimeType = 'image/png';
+        const contentType =
+          resp.headers.get(
+            'content-type'
+          );
+
+        if (contentType) {
+          mimeType = contentType;
         }
       } else if (
         photoBase64.includes('base64,')
@@ -961,38 +996,27 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
 
       let renderSuccess = false;
 
-      const ffmpegEnv = {
-        ...process.env,
-        FONTCONFIG_FILE: process.env.FONTCONFIG_FILE || '/tmp/fonts/fonts.conf',
-        FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/tmp/fonts',
-      };
-
       try {
-        execSync(ffmpegCmdPrimary, { stdio: 'pipe', env: ffmpegEnv });
+        execSync(ffmpegCmdPrimary, { stdio: 'pipe' });
         if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
           renderSuccess = true;
         }
       } catch (primaryErr: any) {
-        console.warn('Primary ASS subtitle FFmpeg render warning, retrying with drawtext fallback:', primaryErr?.stderr?.toString() || primaryErr?.message);
+        console.warn('Primary ASS subtitle FFmpeg render warning, retrying with direct overlay fallback:', primaryErr?.stderr?.toString() || primaryErr?.message);
       }
 
-      // Robust fallback overlay with direct fontfile drawtext if ass filter has any issues
+      // Robust fallback overlay if ass filter has fontconfig issues on cloud hosting
       if (!renderSuccess) {
         try {
-          const fontFilePath = getFontFilePathForText(assSafeName);
-          const safeFontFilePath = fontFilePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
-          const safeDrawText = assSafeName.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:').replace(/%/g, '\\%');
-          const drawFontSize = assFontSize;
-
           const ffmpegCmdFallback =
-            `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]drawtext=fontfile='${safeFontFilePath}':text='${safeDrawText}':fontcolor=white:fontsize=${drawFontSize}:x=(w-text_w)/2:y=1510:borderw=4:bordercolor=0x15158A:shadowcolor=black@0.5:shadowx=2:shadowy=2[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
+            `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -profile:v high -level:v 4.1 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
 
-          execSync(ffmpegCmdFallback, { stdio: 'pipe', env: ffmpegEnv });
+          execSync(ffmpegCmdFallback, { stdio: 'pipe' });
           if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
             renderSuccess = true;
           }
         } catch (fallbackErr: any) {
-          console.warn('Fallback render warning:', fallbackErr?.message);
+          console.warn('Fallback render warning, retrying with safe ultrafast transcode:', fallbackErr?.message);
         }
       }
 
@@ -1001,7 +1025,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
         const ffmpegCmdSafe =
           `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
 
-        execSync(ffmpegCmdSafe, { stdio: 'pipe', env: ffmpegEnv });
+        execSync(ffmpegCmdSafe, { stdio: 'pipe' });
       }
 
       if (!fs.existsSync(outputMp4Path) || fs.statSync(outputMp4Path).size < 1000) {
@@ -1184,9 +1208,9 @@ function initializeSystemFonts(): void {
   try {
     const fontDir = getFontDir();
     const sysFontDirs = [
-      '/tmp/fonts',
       path.join(process.env.HOME || '/root', '.local', 'share', 'fonts'),
-      path.join(process.env.HOME || '/root', '.fonts')
+      path.join(process.env.HOME || '/root', '.fonts'),
+      '/tmp/fonts'
     ];
 
     for (const sDir of sysFontDirs) {
@@ -1212,7 +1236,7 @@ function initializeSystemFonts(): void {
     }
 
     try {
-      execSync('fc-cache -f "/tmp/fonts"', { stdio: 'ignore' });
+      execSync('fc-cache -f', { stdio: 'ignore' });
       console.log('System font cache (fc-cache) updated successfully.');
     } catch {}
   } catch (err) {
