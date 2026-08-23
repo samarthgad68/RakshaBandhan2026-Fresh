@@ -986,7 +986,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
       // Ensure paths are safely escaped for FFmpeg filtergraph syntax
     const safeAssPath = assFilePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
     const safeFontDir = fontDir.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
-    const ffmpegCmdPrimary = `"${ffmpegBin}" -nostdin -threads 1 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551:eval=init[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 35 -pix_fmt yuv420p -c:a aac -b:a 64k -ar 22050 -ac 1 -max_muxing_queue_size 1024 -movflags +faststart "${outputMp4Path}"`;
+    const ffmpegCmdPrimary = `"${ffmpegBin}" -nostdin -threads 1 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v]scale=540:960[v0];[v0][1:v]overlay=65:275:eval=init[v1];[v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 38 -pix_fmt yuv420p -c:a aac -b:a 48k -ar 16000 -ac 1 -max_muxing_queue_size 512 -movflags +faststart "${outputMp4Path}"`;
         const ffmpegEnv = {
         ...process.env,
         FONTCONFIG_FILE: process.env.FONTCONFIG_FILE || '/tmp/fonts/fonts.conf',
