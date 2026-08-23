@@ -983,19 +983,16 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
         getFontDir();
 
       // Ensure paths are safely escaped for FFmpeg filtergraph syntax
-      const safeAssPath = assFilePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
-      const safeFontDir = fontDir.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
-
-      const ffmpegCmdPrimary =
-        `"${ffmpegBin}" -nostdin -threads 1 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
-
-      let renderSuccess = false;
-
-      const ffmpegEnv = {
+      // Ensure paths are safely escaped for FFmpeg filtergraph syntax
+    const safeAssPath = assFilePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+    const safeFontDir = fontDir.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+    const ffmpegCmdPrimary = `"${ffmpegBin}" -nostdin -threads 1 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 32 -pix_fmt yuv420p -c:a aac -b:a 96k -ar 22050 -ac 1 -movflags +faststart "${outputMp4Path}"`;
+    
+    const ffmpegEnv = {
         ...process.env,
         FONTCONFIG_FILE: process.env.FONTCONFIG_FILE || '/tmp/fonts/fonts.conf',
         FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/tmp/fonts',
-      };
+    };
 
       try {
         execSync(ffmpegCmdPrimary, { stdio: 'pipe', env: ffmpegEnv });

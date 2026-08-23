@@ -19,6 +19,7 @@ import { Sparkles, CheckCircle2 } from 'lucide-react';
 export default function App() {
   const [currentView, setCurrentView] = useState<'home' | 'catalog' | 'details'>('home');
   const [selectedTemplate, setSelectedTemplate] = useState<VideoTemplate>(TEMPLATES[0]);
+  
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>(() => {
     try {
       const saved = localStorage.getItem('rb_payment_info');
@@ -61,7 +62,6 @@ export default function App() {
       localStorage.setItem('rb_payment_info', JSON.stringify(info));
     } catch {}
     setIsPaymentModalOpen(false);
-    // After payment, open the Video Generator catalog
     setCurrentView('catalog');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -73,6 +73,21 @@ export default function App() {
     } else {
       setIsExporterOpen(true);
     }
+  };
+
+  // **नवीन फंक्शन: व्हिडिओ डाऊनलोड झाल्यावर पेमेंट टोकन डिलीट करण्यासाठी**
+  const handleResetPaymentAfterDownload = () => {
+    localStorage.removeItem('rb_payment_info');
+    setPaymentInfo({
+      isPaid: false,
+      paymentId: '',
+      upiRef: '',
+      amount: 11,
+      paidAt: null
+    });
+    setIsExporterOpen(false);
+    setCurrentView('home');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleBackToCatalog = () => {
@@ -110,7 +125,6 @@ export default function App() {
       {/* Main Content Areas */}
       <main className="flex-grow">
         
-        {/* Step 1: Default Home Page displayed first when clicking the link */}
         {currentView === 'home' && (
           <LandingPage
             onUnlockClick={() => setIsPaymentModalOpen(true)}
@@ -119,10 +133,8 @@ export default function App() {
           />
         )}
 
-        {/* Step 2: Video Generator Template Catalog */}
         {currentView === 'catalog' && (
           <>
-            {/* Unlocked Header Banner at top of Template Page */}
             <section className="bg-gradient-to-b from-[#8A1538]/10 via-[#FAF7F2] to-[#FAF7F2] border-b border-[#E8DFC8] py-8 px-4 text-center">
               <div className="max-w-3xl mx-auto space-y-3">
                 {paymentInfo.isPaid ? (
@@ -147,7 +159,6 @@ export default function App() {
               </div>
             </section>
 
-            {/* Template Selector Catalog (13 HD Video Templates) */}
             <TemplateSelector
               selectedTemplateId={selectedTemplate.id}
               onSelectTemplate={handleSelectTemplate}
@@ -156,7 +167,6 @@ export default function App() {
           </>
         )}
 
-        {/* Step 3: Dedicated Video Generator Customization Form & Realtime Preview */}
         {currentView === 'details' && (
           <VideoGenerator
             template={selectedTemplate}
@@ -184,7 +194,7 @@ export default function App() {
       {/* HD MP4 Video Generation & Direct Downloader Modal */}
       <VideoExporter
         isOpen={isExporterOpen}
-        onClose={() => setIsExporterOpen(false)}
+        onClose={handleResetPaymentAfterDownload}
         formData={activeFormData}
         template={selectedTemplate}
         paymentInfo={paymentInfo}
