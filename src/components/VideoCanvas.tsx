@@ -78,7 +78,6 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
           }
 
           // 2. Render Single Photo masked inside exact circular area
-          // Photo Specs: X=131.1, Y=551.1, W=817.7, H=817.7
           const pX = template.photoX || 131.1;
           const pY = template.photoY || 551.1;
           const pW = template.photoWidth || 817.7;
@@ -96,7 +95,6 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
 
           if (imageRef.current && imageRef.current.complete) {
             const img = imageRef.current;
-            // Aspect fill calculation inside pW x pH
             const imgAspect = img.width / img.height;
             const boxAspect = pW / pH;
             let drawW = pW;
@@ -114,19 +112,17 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
 
             ctx.drawImage(img, drawX, drawY, drawW, drawH);
           } else {
-            // Placeholder user photo area
             ctx.fillStyle = '#2A2620';
             ctx.fill();
             ctx.fillStyle = '#FFD700';
-            ctx.font = 'bold 48px "Laila", "Noto Sans Devanagari", sans-serif';
+            ctx.font = 'bold 48px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('Upload Photo', centerX, centerY);
           }
           ctx.restore();
 
-          // 3. Render Single Name inside exact Name Area
-          // Name Specs: X=108, Y=1360, W=922.8, H=313.9
+          // 3. Render Single Name inside exact Name Area with full Indian language font fallback support
           const nX = template.nameX || 108;
           const nY = (template.nameY || 1333.9) + 26;
           const nW = template.nameWidth || 922.8;
@@ -137,7 +133,6 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
           const nameText = formData.name || 'Your Name';
 
           ctx.save();
-          // Dynamic font size calculation (substantially increased size)
           let fontSize = 132;
           if (nameText.length > 8) fontSize = 110;
           if (nameText.length > 14) fontSize = 88;
@@ -148,7 +143,9 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
           ctx.shadowBlur = 16;
           ctx.shadowOffsetX = 3;
           ctx.shadowOffsetY = 4;
-          ctx.font = `bold ${fontSize}px "Noto Sans Devanagari", "Noto Sans Gujarati", "Noto Sans Bengali", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Kannada", "Noto Sans Malayalam", "Noto Sans Gurmukhi", "Noto Sans Oriya", "Noto Sans Arabic", "Noto Sans", "Laila", "Yatra One", "Poppins", sans-serif`;
+          
+          // Added robust font-family stack supporting all Indian regional scripts with system & public folder fallbacks
+          ctx.font = `bold ${fontSize}px "Noto Sans", "Noto Sans Devanagari", "Noto Sans Gujarati", "Noto Sans Bengali", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Kannada", "Noto Sans Malayalam", "Noto Sans Gurmukhi", "Noto Sans Oriya", "Laila", "Yatra One", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(nameText, nameCenterX, nameCenterY);
@@ -159,7 +156,16 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
       animationFrameId = requestAnimationFrame(render);
     };
 
-    render();
+    // Ensure document fonts are loaded before starting the render loop to guarantee proper glyph rendering across languages
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        render();
+      }).catch(() => {
+        render();
+      });
+    } else {
+      render();
+    }
 
     return () => {
       cancelAnimationFrame(animationFrameId);
