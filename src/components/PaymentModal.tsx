@@ -55,7 +55,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       // 1. Ensure Razorpay Checkout SDK is ready
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded || !(window as any).Razorpay) {
-        throw new Error('Razorpay Checkout SDK is loading or unavailable. Please check your internet connection and try again.');
+        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
       }
 
       // 2. Call backend to create real Razorpay Order
@@ -71,17 +71,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       const orderData = await createOrderRes.json().catch(() => ({}));
 
       if (!createOrderRes.ok || !orderData.success || !orderData.order) {
-        throw new Error(orderData.error || 'Failed to create payment order. Please ensure Razorpay keys are configured.');
+        throw new Error(orderData.error || 'Failed to create payment order. Please verify API keys on Render.');
       }
 
       const { order, keyId } = orderData;
       const effectiveKeyId = keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
 
       if (!effectiveKeyId) {
-        throw new Error('Razorpay Key ID not available on server.');
+        throw new Error('Razorpay Key ID missing. Please check VITE_RAZORPAY_KEY_ID in Render settings.');
       }
 
-      // 3. Configure Razorpay Standard Checkout Options
+      // 3. Configure Razorpay Standard Checkout Options (Mobile & Desktop optimized)
       const options = {
         key: effectiveKeyId,
         amount: order.amount,
@@ -115,7 +115,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             const verifyData = await verifyRes.json().catch(() => ({}));
 
             if (!verifyRes.ok || !verifyData.success || !verifyData.paymentToken) {
-              throw new Error(verifyData.error || 'Payment signature verification failed on server.');
+              throw new Error(verifyData.error || 'Payment verification failed on server.');
             }
 
             setIsVerifying(false);
@@ -140,7 +140,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           } catch (verifyErr: any) {
             console.error('Signature verification error:', verifyErr);
             setIsVerifying(false);
-            setErrorMessage(verifyErr.message || 'Payment signature verification failed. Please try again.');
+            setErrorMessage(verifyErr.message || 'Payment verification failed. Please try again.');
           }
         },
         prefill: {
@@ -181,7 +181,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       console.error('Razorpay initialization error:', err);
       setIsProcessing(false);
       setIsVerifying(false);
-      setErrorMessage(err.message || 'Could not connect to Razorpay payment gateway.');
+      setErrorMessage(err.message || 'Could not launch payment gateway. Please try again.');
     }
   };
 
