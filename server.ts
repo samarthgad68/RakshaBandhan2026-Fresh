@@ -993,9 +993,8 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
         FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/tmp/fonts',
         let renderSuccess = false;
     };
-let renderSuccess = false;
-
-try {
+    
+ try {
   await new Promise((resolve, reject) => {
     exec(
       ffmpegCmdPrimary,
