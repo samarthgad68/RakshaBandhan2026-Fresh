@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -84,7 +83,7 @@ function getFfmpegBinary(): string {
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Payment-Token, x-payment-token');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -106,44 +105,24 @@ app.get('/api/health', (req, res) => {
 const VERIFIED_PAYMENT_TOKENS = new Set<string>();
 
 // Dynamic signing key for resilient session tokens (valid across restarts and load balancers)
-function getPaymentSigningSalt(): string {
-  const { keySecret } = getRazorpayCredentials();
-  return keySecret || process.env.RAZORPAY_KEY_SECRET || 'rb_video_secure_payment_salt_2026';
-}
+const PAYMENT_SIGNING_SALT = process.env.RAZORPAY_KEY_SECRET || 'rb_video_secure_payment_salt_2026';
 
 function createPaymentSessionToken(paymentId: string): string {
-  const cleanPaymentId = String(paymentId || '').trim();
   const rand = crypto.randomBytes(12).toString('hex');
   const timestamp = Date.now().toString();
-  const payload = `${rand}.${timestamp}.${cleanPaymentId || 'pay'}`;
-  const salt = getPaymentSigningSalt();
-  const sig = crypto.createHmac('sha256', salt).update(payload).digest('hex').substring(0, 32);
+  const payload = `${rand}.${timestamp}.${paymentId || 'pay'}`;
+  const sig = crypto.createHmac('sha256', PAYMENT_SIGNING_SALT).update(payload).digest('hex').substring(0, 32);
   const token = `pay_token_${payload}.${sig}`;
-  
   VERIFIED_PAYMENT_TOKENS.add(token);
-  if (cleanPaymentId) {
-    VERIFIED_PAYMENT_TOKENS.add(cleanPaymentId);
-  }
   return token;
 }
 
 function validatePaymentSessionToken(token: string): boolean {
   if (!token || typeof token !== 'string') return false;
-  const trimmed = token.trim();
-  if (!trimmed) return false;
+  if (VERIFIED_PAYMENT_TOKENS.has(token)) return true;
 
-  // 1. Direct in-memory lookup
-  if (VERIFIED_PAYMENT_TOKENS.has(trimmed)) return true;
-
-  // 2. If it's a valid Razorpay Payment ID format (e.g. pay_...)
-  if (/^pay_[a-zA-Z0-9_-]{4,64}$/.test(trimmed)) {
-    VERIFIED_PAYMENT_TOKENS.add(trimmed);
-    return true;
-  }
-
-  // 3. Cryptographic signature verification for stateless / multi-instance validation
-  if (trimmed.startsWith('pay_token_')) {
-    const withoutPrefix = trimmed.substring('pay_token_'.length);
+  if (token.startsWith('pay_token_')) {
+    const withoutPrefix = token.substring('pay_token_'.length);
     const lastDot = withoutPrefix.lastIndexOf('.');
     if (lastDot === -1) return false;
     const payload = withoutPrefix.substring(0, lastDot);
@@ -156,32 +135,19 @@ function validatePaymentSessionToken(token: string): boolean {
     if (isNaN(timestamp) || Date.now() - timestamp > 72 * 60 * 60 * 1000) {
       return false;
     }
-
-    // Try current salt, raw secret, and fallback salt to handle restarts seamlessly
-    const saltsToTry = [
-      getPaymentSigningSalt(),
-      process.env.RAZORPAY_KEY_SECRET || '',
-      'rb_video_secure_payment_salt_2026'
-    ].filter(Boolean);
-
-    for (const salt of saltsToTry) {
-      const expectedSig = crypto.createHmac('sha256', salt).update(payload).digest('hex').substring(0, 32);
-      if (expectedSig === sig) {
-        VERIFIED_PAYMENT_TOKENS.add(trimmed);
-        return true;
-      }
+    const expectedSig = crypto.createHmac('sha256', PAYMENT_SIGNING_SALT).update(payload).digest('hex').substring(0, 32);
+    if (expectedSig === sig) {
+      VERIFIED_PAYMENT_TOKENS.add(token);
+      return true;
     }
   }
-
   return false;
 }
 
 // Helper to retrieve Razorpay credentials securely from environment
 function getRazorpayCredentials() {
-  const rawKeyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '';
-  const rawKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
-  const keyId = rawKeyId.trim().replace(/^["']|["']$/g, '');
-  const keySecret = rawKeySecret.trim().replace(/^["']|["']$/g, '');
+  const keyId = (process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '').trim();
+  const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').trim();
   return { keyId, keySecret };
 }
 
@@ -484,156 +450,153 @@ function getFontDir(): string {
   );
 }
 
-// Helper for escaping XML in SVG content
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-// In-memory cache for base64 encoded font definitions
-// to avoid disk reads on every request
-let cachedFontFaceStyles = '';
-
-function getFontStyles(): string {
-  if (cachedFontFaceStyles) {
-    return cachedFontFaceStyles;
-  }
-
-  const fontFilesList = [
-    {
-      name: 'NotoSansDevanagariCustom',
-      file: 'NotoSansDevanagari.ttf',
-    },
-    {
-      name: 'NotoSansGujaratiCustom',
-      file: 'NotoSansGujarati.ttf',
-    },
-    {
-      name: 'NotoSansBengaliCustom',
-      file: 'NotoSansBengali.ttf',
-    },
-    {
-      name: 'NotoSansTamilCustom',
-      file: 'NotoSansTamil.ttf',
-    },
-    {
-      name: 'NotoSansTeluguCustom',
-      file: 'NotoSansTelugu.ttf',
-    },
-    {
-      name: 'NotoSansKannadaCustom',
-      file: 'NotoSansKannada.ttf',
-    },
-    {
-      name: 'NotoSansMalayalamCustom',
-      file: 'NotoSansMalayalam.ttf',
-    },
-    {
-      name: 'NotoSansGurmukhiCustom',
-      file: 'NotoSansGurmukhi.ttf',
-    },
-    {
-      name: 'NotoSansOriyaCustom',
-      file: 'NotoSansOriya.ttf',
-    },
-    {
-      name: 'NotoSansArabicCustom',
-      file: 'NotoSansArabic.ttf',
-    },
-    {
-      name: 'NotoSansCustom',
-      file: 'NotoSans.ttf',
-    },
-  ];
-
-  let styles = '';
-
+function getFontFilePathForText(text: string): string {
   const fontDir = getFontDir();
 
-  const sysFontDir = path.join(
-    process.env.HOME || '/root',
-    '.local',
-    'share',
-    'fonts'
-  );
-
-  try {
-    if (!fs.existsSync(sysFontDir)) {
-      fs.mkdirSync(sysFontDir, {
-        recursive: true,
-      });
-    }
-  } catch (e) {
-    console.warn(
-      'Could not create sysFontDir:',
-      e
-    );
+  // Devanagari (Hindi, Marathi, Sanskrit, Konkani, Nepali, Maithili, Bhojpuri, etc.)
+  if (/[\u0900-\u097F\uA8E0-\uA8FF\u1CD0-\u1CFF]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansDevanagari-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansDevanagari.ttf');
   }
 
-  for (const fontInfo of fontFilesList) {
-    const fPath = path.join(
-      fontDir,
-      fontInfo.file
-    );
+  // Gujarati
+  if (/[\u0A80-\u0AFF]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansGujarati-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansGujarati.ttf');
+  }
+
+  // Bengali & Assamese
+  if (/[\u0980-\u09FF]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansBengali-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansBengali.ttf');
+  }
+
+  // Punjabi / Gurmukhi
+  if (/[\u0A00-\u0A7F]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansGurmukhi-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansGurmukhi.ttf');
+  }
+
+  // Odia / Oriya
+  if (/[\u0B00-\u0B7F]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansOriya-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansOriya.ttf');
+  }
+
+  // Tamil
+  if (/[\u0B80-\u0BFF]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansTamil-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansTamil.ttf');
+  }
+
+  // Telugu
+  if (/[\u0C00-\u0C7F]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansTelugu-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansTelugu.ttf');
+  }
+
+  // Kannada
+  if (/[\u0C80-\u0CFF]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansKannada-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansKannada.ttf');
+  }
+
+  // Malayalam
+  if (/[\u0D00-\u0D7F]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansMalayalam-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansMalayalam.ttf');
+  }
+
+  // Arabic / Urdu / Sindhi / Persian
+  if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)) {
+    const bold = path.join(fontDir, 'NotoSansArabic-Bold.ttf');
+    if (fs.existsSync(bold)) return bold;
+    return path.join(fontDir, 'NotoSansArabic.ttf');
+  }
+
+  const bold = path.join(fontDir, 'NotoSans-Bold.ttf');
+  if (fs.existsSync(bold)) return bold;
+  return path.join(fontDir, 'NotoSans.ttf');
+}
+
+function initFontEnvironment(): void {
+  const fontDir = getFontDir();
+  const tmpFontDir = '/tmp/fonts';
+  const tmpCacheDir = '/tmp/fc-cache';
+  const home = process.env.HOME || '/root';
+  const userFontsDir = path.join(home, '.fonts');
+  const userLocalShareFontsDir = path.join(home, '.local', 'share', 'fonts');
+
+  try {
+    for (const d of [tmpFontDir, tmpCacheDir, userFontsDir, userLocalShareFontsDir]) {
+      if (!fs.existsSync(d)) {
+        fs.mkdirSync(d, { recursive: true });
+      }
+    }
+
+    if (fs.existsSync(fontDir)) {
+      const files = fs.readdirSync(fontDir);
+      for (const file of files) {
+        if (file.endsWith('.ttf') || file.endsWith('.otf') || file.endsWith('.woff') || file.endsWith('.woff2')) {
+          const src = path.join(fontDir, file);
+          for (const targetDir of [tmpFontDir, userFontsDir, userLocalShareFontsDir]) {
+            const dest = path.join(targetDir, file);
+            try {
+              if (!fs.existsSync(dest) || fs.statSync(dest).size !== fs.statSync(src).size) {
+                fs.copyFileSync(src, dest);
+              }
+            } catch {}
+          }
+        }
+      }
+    }
+
+    // Write fonts.conf for fontconfig / libass / FFmpeg
+    const fontsConfPath = path.join(tmpFontDir, 'fonts.conf');
+    const fontsConfContent = `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>${tmpFontDir}</dir>
+  <dir>${fontDir}</dir>
+  <dir>${userFontsDir}</dir>
+  <dir>${userLocalShareFontsDir}</dir>
+  <cachedir>${tmpCacheDir}</cachedir>
+  <config></config>
+</fontconfig>`;
+
+    fs.writeFileSync(fontsConfPath, fontsConfContent);
+
+    process.env.FONTCONFIG_FILE = fontsConfPath;
+    process.env.FONTCONFIG_PATH = tmpFontDir;
 
     try {
-      if (fs.existsSync(fPath)) {
-        try {
-          const sysDest = path.join(
-            sysFontDir,
-            fontInfo.file
-          );
+      execSync(`fc-cache -f "${tmpFontDir}" "${fontDir}" "${userFontsDir}"`, { stdio: 'ignore' });
+    } catch {}
 
-          if (!fs.existsSync(sysDest)) {
-            fs.copyFileSync(
-              fPath,
-              sysDest
-            );
-          }
-        } catch {}
-
-        const fontB64 =
-          fs
-            .readFileSync(fPath)
-            .toString('base64');
-
-        styles += `@font-face {
-          font-family: "${fontInfo.name}";
-          src: url("data:font/ttf;charset=utf-8;base64,${fontB64}") format("truetype");
-          font-weight: normal;
-          font-style: normal;
-        }\n`;
-      }
-    } catch (e) {
-      console.warn(
-        `Font loading warning for ${fontInfo.file}:`,
-        e
-      );
-    }
+    console.log('✅ Font configuration initialized successfully. Primary font dir:', fontDir);
+  } catch (e) {
+    console.warn('⚠️ Font environment setup note:', e);
   }
-
-  try {
-    execSync(
-      `fc-cache -f "${sysFontDir}"`,
-      {
-        stdio: 'ignore',
-      }
-    );
-  } catch {}
-
-  cachedFontFaceStyles = styles;
-
-  return cachedFontFaceStyles;
 }
+
+// Initialize font environment immediately on startup
+initFontEnvironment();
 
 // Endpoint 2: Generate Video
 app.post(
   '/api/generate-video',
   async (req, res) => {
+    console.log('🔥 GENERATE VIDEO REQUEST RECEIVED');
+    console.log('TEST 123 - CODE UPDATE WORKING');
     let tempDir = '';
 
     try {
@@ -641,27 +604,14 @@ app.post(
         templateId,
         name,
         photoBase64,
-      } = req.body || {};
-
-      // Extract payment token candidates from body, headers, or query
-      const candidateTokens = [
-        req.body?.paymentToken,
-        req.body?.token,
-        req.body?.paymentId,
-        req.body?.razorpay_payment_id,
-        req.headers['x-payment-token'],
-        req.headers['authorization'] ? (req.headers['authorization'] as string).replace(/^Bearer\s+/i, '') : '',
-        req.query?.paymentToken,
-        req.query?.token
-      ]
-        .map(t => (typeof t === 'string' ? t.trim() : ''))
-        .filter(t => t && t !== 'undefined' && t !== 'null');
-
-      const isPaymentVerified = candidateTokens.some(token => validatePaymentSessionToken(token));
+        paymentToken,
+      } = req.body;
 
       // 1. Validate payment token server-side
-      if (!isPaymentVerified) {
-        console.warn('Payment verification required. Candidates checked:', candidateTokens.length ? candidateTokens.map(c => `${c.substring(0, 16)}...`) : 'NONE');
+      if (
+        !paymentToken ||
+        !validatePaymentSessionToken(paymentToken)
+      ) {
         return res.status(403).json({
           error:
             'Payment verification required. Please complete ₹11 payment first.',
@@ -1041,27 +991,38 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
 
       let renderSuccess = false;
 
+      const ffmpegEnv = {
+        ...process.env,
+        FONTCONFIG_FILE: process.env.FONTCONFIG_FILE || '/tmp/fonts/fonts.conf',
+        FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/tmp/fonts',
+      };
+
       try {
-        execSync(ffmpegCmdPrimary, { stdio: 'pipe' });
+        execSync(ffmpegCmdPrimary, { stdio: 'pipe', env: ffmpegEnv });
         if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
           renderSuccess = true;
         }
       } catch (primaryErr: any) {
-        console.warn('Primary ASS subtitle FFmpeg render warning, retrying with direct overlay fallback:', primaryErr?.stderr?.toString() || primaryErr?.message);
+        console.warn('Primary ASS subtitle FFmpeg render warning, retrying with drawtext fallback:', primaryErr?.stderr?.toString() || primaryErr?.message);
       }
 
-      // Robust fallback overlay if ass filter has fontconfig issues on cloud hosting
+      // Robust fallback overlay with direct fontfile drawtext if ass filter has any issues
       if (!renderSuccess) {
         try {
-          const ffmpegCmdFallback =
-            `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -profile:v high -level:v 4.1 -preset veryfast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
+          const fontFilePath = getFontFilePathForText(assSafeName);
+          const safeFontFilePath = fontFilePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+          const safeDrawText = assSafeName.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:').replace(/%/g, '\\%');
+          const drawFontSize = assFontSize;
 
-          execSync(ffmpegCmdFallback, { stdio: 'pipe' });
+          const ffmpegCmdFallback =
+            `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[v1]; [v1]drawtext=fontfile='${safeFontFilePath}':text='${safeDrawText}':fontcolor=white:fontsize=${drawFontSize}:x=(w-text_w)/2:y=1510:borderw=4:bordercolor=0x15158A:shadowcolor=black@0.5:shadowx=2:shadowy=2[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
+
+          execSync(ffmpegCmdFallback, { stdio: 'pipe', env: ffmpegEnv });
           if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
             renderSuccess = true;
           }
         } catch (fallbackErr: any) {
-          console.warn('Fallback render warning, retrying with safe ultrafast transcode:', fallbackErr?.message);
+          console.warn('Fallback render warning:', fallbackErr?.message);
         }
       }
 
@@ -1070,7 +1031,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
         const ffmpegCmdSafe =
           `"${ffmpegBin}" -nostdin -threads 2 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v][1:v]overlay=131:551[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "${outputMp4Path}"`;
 
-        execSync(ffmpegCmdSafe, { stdio: 'pipe' });
+        execSync(ffmpegCmdSafe, { stdio: 'pipe', env: ffmpegEnv });
       }
 
       if (!fs.existsSync(outputMp4Path) || fs.statSync(outputMp4Path).size < 1000) {

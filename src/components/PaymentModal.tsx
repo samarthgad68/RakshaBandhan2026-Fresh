@@ -99,11 +99,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     try {
       // 1. Ensure Razorpay Checkout SDK is ready
       const isLoaded = await loadRazorpayScript();
-      if (!isLoaded || typeof (window as any).Razorpay !== 'function') {
-        throw new Error('Razorpay Checkout SDK is loading or blocked. Please check your connection.');
+      if (!isLoaded || !(window as any).Razorpay) {
+        throw new Error('Razorpay Checkout SDK is loading or unavailable. Please check your internet connection and try again.');
       }
 
-      // 2. Call backend to create real Razorpay Order (11 INR = 1100 paise)
+      // 2. Call backend to create real Razorpay Order
       const createOrderRes = await fetch(apiUrl('/api/create-order'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,14 +116,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       const orderData = await createOrderRes.json().catch(() => ({}));
 
       if (!createOrderRes.ok || !orderData.success || !orderData.order) {
-        throw new Error(orderData.error || `Failed to create Razorpay order (${createOrderRes.status}).`);
+        throw new Error(orderData.error || 'Failed to create payment order. Please ensure Razorpay keys are configured.');
       }
 
       const { order, keyId } = orderData;
-      const effectiveKeyId = (keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
+      const effectiveKeyId = keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
 
       if (!effectiveKeyId) {
-        throw new Error('Razorpay Key ID is not configured on the server. Please check Render environment variables.');
+        throw new Error('Razorpay Key ID not available on server.');
       }
 
       // 3. Configure Razorpay Standard Checkout Options
@@ -137,11 +137,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         order_id: order.id,
         handler: async (response: {
           razorpay_payment_id: string;
-          razorpay_order_id?: string;
+          razorpay_order_id: string;
           razorpay_signature: string;
         }) => {
           // User completed payment in Razorpay Checkout!
-          // Now verify signature with the backend using HMAC SHA-256
+          // Now verify signature with the backend
           setIsProcessing(false);
           setIsVerifying(true);
           setErrorMessage(null);
@@ -151,7 +151,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id || order.id,
+                razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
                 templateId: templateId,
@@ -173,22 +173,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             const verifiedPayment: PaymentInfo = {
               isPaid: true,
               paymentId: response.razorpay_payment_id,
-              orderId: response.razorpay_order_id || order.id,
+              orderId: response.razorpay_order_id,
               upiRef: response.razorpay_payment_id,
               amount: 11,
               paidAt: new Date().toLocaleTimeString(),
               paymentToken: verifyData.paymentToken
             };
 
-            try {
-              localStorage.setItem('rb_payment_info', JSON.stringify(verifiedPayment));
-              localStorage.setItem('rb_payment_token', verifyData.paymentToken);
-            } catch {}
-
-            // Update app payment state immediately with verified token
-            onPaymentSuccess(verifiedPayment);
-
             setTimeout(() => {
+              onPaymentSuccess(verifiedPayment);
               onClose();
             }, 1200);
 
@@ -213,7 +206,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         modal: {
           ondismiss: () => {
             setIsProcessing(false);
-          }
+          },
+          escape: true,
+          backdropclose: false
+        },
+        retry: {
+          enabled: true
         }
       };
 
@@ -332,7 +330,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     handleInitiatePayment();
                   }}
                   disabled={isProcessing || isVerifying}
-                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold disabled:opacity-50 ${
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'gpay'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'
@@ -350,7 +348,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     handleInitiatePayment();
                   }}
                   disabled={isProcessing || isVerifying}
-                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold disabled:opacity-50 ${
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'phonepe'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'
@@ -368,7 +366,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     handleInitiatePayment();
                   }}
                   disabled={isProcessing || isVerifying}
-                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold disabled:opacity-50 ${
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition cursor-pointer text-xs sm:text-sm font-bold ${
                     selectedApp === 'paytm'
                       ? 'bg-[#8A1538]/10 border-[#8A1538] text-[#8A1538]'
                       : 'bg-white border-[#E8DFC8] text-[#44403C] hover:bg-[#F5EFE6]'

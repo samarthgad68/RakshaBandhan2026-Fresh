@@ -59,9 +59,6 @@ export default function App() {
     setPaymentInfo(info);
     try {
       localStorage.setItem('rb_payment_info', JSON.stringify(info));
-      if (info.paymentToken) {
-        localStorage.setItem('rb_payment_token', info.paymentToken);
-      }
     } catch {}
     setIsPaymentModalOpen(false);
     // After payment, open the Video Generator catalog
