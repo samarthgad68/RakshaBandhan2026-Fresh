@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import ffmpegStatic from 'ffmpeg-static';
@@ -992,7 +992,7 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
         FONTCONFIG_FILE: process.env.FONTCONFIG_FILE || '/tmp/fonts/fonts.conf',
         FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/tmp/fonts',
     };
-
+let renderSuccess = false;
 try {
       // Non-blocking execution to prevent Render server from crashing
       await new Promise((resolve, reject) => {
