@@ -993,14 +993,24 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
         FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/tmp/fonts',
     };
 
-      try {
-        execSync(ffmpegCmdPrimary, { stdio: 'pipe', env: ffmpegEnv });
-        if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
-          renderSuccess = true;
-        }
-      } catch (primaryErr: any) {
-        console.warn('Primary ASS subtitle FFmpeg render warning, retrying with drawtext fallback:', primaryErr?.stderr?.toString() || primaryErr?.message);
+try {
+      // Non-blocking execution to prevent Render server from crashing
+      await new Promise((resolve, reject) => {
+        exec(ffmpegCmdPrimary, { env: ffmpegEnv, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(stdout);
+          }
+        });
+      });
+
+      if (fs.existsSync(outputMp4Path) && fs.statSync(outputMp4Path).size > 1000) {
+        renderSuccess = true;
       }
+    } catch (primaryErr: any) {
+      console.warn('Primary ASS subtitle FFmpeg render warning, retrying with drawtext fallback:', primaryErr?.stderr?.toString() || primaryErr?.message);
+    }
 
       // Robust fallback overlay with direct fontfile drawtext if ass filter has any issues
       if (!renderSuccess) {
