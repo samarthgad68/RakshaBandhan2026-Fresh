@@ -982,12 +982,11 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
       const fontDir =
         getFontDir();
 
-      // Ensure paths are safely escaped for FFmpeg filtergraph syntax
-      // Ensure paths are safely escaped for FFmpeg filtergraph syntax
+// Ensure paths are safely escaped for FFmpeg filtergraph syntax
     const safeAssPath = assFilePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
     const safeFontDir = fontDir.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
-    const ffmpegCmdPrimary = `"${ffmpegBin}" -nostdin -threads 1 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v]scale=360:640[v0];[v0][1:v]overlay=43:183:eval=init[v1];[v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 40 -pix_fmt yuv420p -c:a aac -b:a 32k -ar 11025 -ac 1 -max_muxing_queue_size 256 -movflags +faststart "${outputMp4Path}"`;
-        const ffmpegEnv = {
+    const ffmpegCmdPrimary = `"${ffmpegBin}" -nostdin -threads 1 -y -i "${templateFilePath}" -i "${photoCirclePath}" -filter_complex "[0:v]scale=360:640[v0];[v0][1:v]overlay=43:183:eval=init[v1];[v1]ass='${safeAssPath}':fontsdir='${safeFontDir}'[vout]" -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -crf 60 -pix_fmt yuv420p -c:a aac -b:a 32k -ar 11025 -ac 1 -max_muxing_queue_size 256 -movflags +faststart "${outputMp4Path}"`;
+    const ffmpegEnv = {
         ...process.env,
         FONTCONFIG_FILE: process.env.FONTCONFIG_FILE || '/tmp/fonts/fonts.conf',
         FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/tmp/fonts',
@@ -995,39 +994,6 @@ Dialogue: 0,0:00:00.00,0:01:00.00,Default,,0,0,400,,{\\b1\\pos(540,1555)}${assSa
 
     let renderSuccess = false;
 
-    try {
-      await new Promise((resolve, reject) => {
-        exec(
-          ffmpegCmdPrimary,
-          {
-            env: ffmpegEnv,
-            maxBuffer: 1024 * 1024 * 10
-          },
-          (error, stdout, stderr) => {
-            if (error) {
-              console.error('Primary FFmpeg ERROR:', stderr || error.message);
-              reject(error);
-            } else {
-              resolve(stdout);
-            }
-          }
-        );
-      });
-
-      if (
-        fs.existsSync(outputMp4Path) &&
-        fs.statSync(outputMp4Path).size > 1000
-      ) {
-        renderSuccess = true;
-      }
-    } catch (primaryErr: any) {
-      console.warn(
-        'Primary FFmpeg render warning:',
-        primaryErr?.stderr?.toString() ||
-        primaryErr?.message ||
-        primaryErr
-      );
-    }
     try {
       await new Promise((resolve, reject) => {
         exec(
