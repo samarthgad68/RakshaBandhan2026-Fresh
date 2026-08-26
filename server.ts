@@ -1301,58 +1301,20 @@ function initializeSystemFonts(): void {
 // Vite Dev Middleware vs Production Static File Server
 async function start() {
   initializeSystemFonts();
-  if (
-    process.env.NODE_ENV !==
-    'production'
-  ) {
-    const vite =
-      await createViteServer({
-        server: {
-          middlewareMode: true,
-        },
-        appType: 'spa',
-      });
+  
+  const distPath = path.join(process.cwd(), 'dist');
+  app.use(express.static(distPath));
 
-    app.use(
-      vite.middlewares
-    );
-  } else {
-    const distPath =
-      path.join(
-        process.cwd(),
-        'dist'
-      );
-
-    app.use(
-      express.static(
-        distPath
-      )
-    );
-
-    app.get(
-  '*',
-  (req, res, next) => {
+  app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.includes('.')) {
-      return next(); // जर कोणतीही फाईल կամ API असेल तर लूप न करता पुढे जाऊ देणे
+      return next();
     }
-    res.sendFile(
-      path.join(
-        distPath,
-        'index.html'
-      )
-    );
-  }
-);
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
 
-  app.listen(
-    PORT,
-    '0.0.0.0',
-    () => {
-      console.log(
-        `Raksha Bandhan Server running on http://0.0.0.0:${PORT}`
-      );
-    }
-  );
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Raksha Bandhan Server running on http://0.0.0.0:${PORT}`);
+  });
 }
 
 start();
