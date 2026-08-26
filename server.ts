@@ -27,7 +27,10 @@ const __dirname = __filename
 const app = express();
 app.set('trust proxy', 1)
 app.set('trust proxy', 1);
-
+app.use((req, res, next) => {
+  console.log(`Incoming request: ${req.method} ${req.url}, Protocol: ${req.protocol}, Secure: ${req.secure}`);
+  next();
+});
 // Safe Port configuration for cloud hosting
 const portVal = process.env.PORT;
 
