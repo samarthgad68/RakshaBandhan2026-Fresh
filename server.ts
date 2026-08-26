@@ -25,8 +25,8 @@ const __dirname = __filename
   : process.cwd();
 
 const app = express();
+app.set('trust proxy', 1)
 app.set('trust proxy', 1);
-app.set('trust proxy', true);
 
 // Safe Port configuration for cloud hosting
 const portVal = process.env.PORT;
