@@ -796,7 +796,7 @@ app.post(
           assSafeName
         );
 
-      const assFontSize = 120;
+      const assFontSize = 200;
       
       const assFilePath =
         path.join(
