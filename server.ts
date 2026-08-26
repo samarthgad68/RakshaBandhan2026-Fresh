@@ -1330,17 +1330,19 @@ async function start() {
     );
 
     app.get(
-      '*',
-      (req, res) => {
-        res.sendFile(
-          path.join(
-            distPath,
-            'index.html'
-          )
-        );
-      }
+  '*',
+  (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.includes('.')) {
+      return next(); // जर कोणतीही फाईल կամ API असेल तर लूप न करता पुढे जाऊ देणे
+    }
+    res.sendFile(
+      path.join(
+        distPath,
+        'index.html'
+      )
     );
   }
+);
 
   app.listen(
     PORT,
