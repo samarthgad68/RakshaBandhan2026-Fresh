@@ -26,6 +26,7 @@ const __dirname = __filename
 
 const app = express();
 app.set('trust proxy', true);
+app.set('trust proxy', true);
 app.use((req, res, next) => {
   if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https') {
     // जर प्रॉक्सीकडून HTTP आली तर तिला लूप न करता सरळ पुढे किंवा https वर सामावून घेणे
